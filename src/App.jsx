@@ -154,6 +154,23 @@ const globalStyles = `
     border-color: var(--bs-primary) !important;
     border-width: 2px !important;
   }
+
+  /* --- NEW: Responsive Product Card Images --- */
+  .grid-view-img {
+    height: 200px;
+    width: 100%;
+  }
+  .list-view-img {
+    width: 120px !important;
+    height: 100% !important;
+    min-height: 150px !important;
+  }
+  @media (min-width: 768px) {
+    .list-view-img {
+      width: 250px !important;
+      min-height: 200px !important;
+    }
+  }
 `;
 
 // --- Edit Product Modal ---
@@ -321,17 +338,16 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
 }
 
 // --- ProductCard ---
+// --- ProductCard ---
 function ProductCard({ product, viewMode, onViewDetails, isLiked, onToggleLike }) {
   const colClass = viewMode === 'grid' ? "col-md-4 mb-4" : "col-12 mb-4";
   const cardLayout = viewMode === 'list' ? "flex-row" : "flex-column";
-  const imgStyle = viewMode === 'list' ? { width: '250px', height: '100%', minHeight: '200px', cursor: 'pointer' } : { height: '200px', cursor: 'pointer' };
 
   return (
     <div className={colClass}>
       <div className={`card h-100 shadow-sm border-0 rounded-4 overflow-hidden d-flex ${cardLayout} bg-body`}>
-        <div className="position-relative bg-body-tertiary flex-shrink-0" style={{...imgStyle, backgroundImage: `url(${product.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center'}} onClick={() => onViewDetails(product)}>
+        <div className={`position-relative bg-body-tertiary flex-shrink-0 ${viewMode === 'list' ? 'list-view-img' : 'grid-view-img'}`} style={{cursor: 'pointer', backgroundImage: `url(${product.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center'}} onClick={() => onViewDetails(product)}>
           <span className="badge bg-success position-absolute top-0 start-0 m-3">NEW</span>
-          
           <button 
             className="btn bg-body rounded-circle shadow-sm p-0 position-absolute top-0 end-0 m-3 d-flex align-items-center justify-content-center border" 
             style={{width: '35px', height: '35px', zIndex: 5, transition: 'transform 0.2s ease'}} 
@@ -391,8 +407,6 @@ function App() {
     localStorage.setItem(getLikedKey(email), JSON.stringify(likedItems));
   }, [likedItems]);
 
-  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
-  
   // Customer Orders State
   const [activeOrderTab, setActiveOrderTab] = useState('All');
   const orderTabs = ['All', 'To pay', 'To Ship', 'To Receive', 'To Review', 'Returns'];
@@ -795,7 +809,7 @@ function App() {
       <style>{globalStyles}</style>
       
       {currentView !== 'checkout' && (
-        <nav className="navbar navbar-expand-lg bg-body shadow-sm py-3 mb-0 sticky-top border-bottom">
+        <nav className={`navbar navbar-expand-lg bg-body shadow-sm py-3 mb-0 sticky-top border-bottom ${(currentView === 'customer_orders' || currentView === 'wishlist') ? 'd-none d-md-flex' : ''}`}>
           <div className="container-fluid px-4 d-flex justify-content-between align-items-center">
             
             <a className="navbar-brand fw-bold d-flex align-items-center gap-2 m-0 text-body" onClick={() => setCurrentView('store')} style={{cursor: 'pointer'}}>
@@ -809,7 +823,7 @@ function App() {
                 <input type="text" className="form-control bg-transparent border-0 shadow-none text-body ms-2 p-0 search-input" placeholder="Search products..." value={searchQuery} onChange={(e) => {setSearchQuery(e.target.value); setCurrentView('store');}}/>
               </div>
               
-              <button className="btn btn-outline-secondary border-0 position-relative rounded-circle" onClick={() => setIsWishlistOpen(true)}>
+              <button className="btn btn-outline-secondary border-0 position-relative rounded-circle d-none d-md-block" onClick={() => setCurrentView('wishlist')}>
                 <i className="bi bi-heart fs-5 text-body"></i>
                 {likedItems.length > 0 && <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{likedItems.length}</span>}
               </button>
@@ -819,7 +833,7 @@ function App() {
                 {totalQuantity > 0 && <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{totalQuantity}</span>}
               </button>
 
-              <button className="btn btn-outline-secondary border-0 position-relative rounded-circle" onClick={() => {
+              <button className="btn btn-outline-secondary border-0 position-relative rounded-circle d-none d-md-block" onClick={() => {
                 if (!userRole) {
                   setIsSignUpMode(false);
                   setShowLoginModal(true);
@@ -1261,9 +1275,9 @@ function App() {
                   </div>
                 </div>
                 <div className="col-md-9">
-                  <div className="d-flex justify-content-between align-items-center mb-4 bg-body p-3 rounded-4 shadow-sm border">
+                  <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 bg-body p-3 rounded-4 shadow-sm border">
                     <span className="text-muted fw-semibold">Showing {displayProducts.length} Product{displayProducts.length !== 1 ? 's' : ''}</span>
-                    <div className="d-flex gap-3 align-items-center">
+                    <div className="d-flex gap-3 align-items-center align-self-stretch align-self-md-auto justify-content-between">
                       <div className="btn-group shadow-sm">
                         <button className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setViewMode('grid')}><i className="bi bi-grid-fill"></i></button>
                         <button className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setViewMode('list')}><i className="bi bi-list-ul"></i></button>
@@ -1370,6 +1384,47 @@ function App() {
                           </div>
                         </div>
                       ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- WISHLIST VIEW --- */}
+            {currentView === 'wishlist' && (
+              <div className="row justify-content-center pb-5">
+                <div className="col-lg-10 col-xl-8 mt-4">
+                  <button className="btn btn-link text-body text-decoration-none px-0 mb-3 fw-semibold" onClick={() => setCurrentView('store')}>
+                    <i className="bi bi-arrow-left me-2"></i> Back to Store
+                  </button>
+                  
+                  <h4 className="fw-bold mb-4 text-body"><i className="bi bi-heart-fill text-danger me-2"></i>My Wishlist</h4>
+                  
+                  <div className="bg-body rounded-4 shadow-sm overflow-hidden mb-4 border p-4">
+                    {likedItems.length === 0 ? (
+                      <div className="text-center py-5">
+                        <i className="bi bi-heartbreak text-muted mb-3 d-block" style={{ fontSize: '4rem' }}></i>
+                        <h5 className="fw-bold text-body">Your wishlist is empty</h5>
+                        <button className="btn btn-primary rounded-pill px-4 fw-semibold mt-2" onClick={() => setCurrentView('store')}>Explore Products</button>
+                      </div>
+                    ) : (
+                      <div className="d-flex flex-column gap-3">
+                        {likedItems.map((item) => (
+                          <div key={item.id} className="card border shadow-sm rounded-4 p-3 bg-body d-flex flex-row align-items-center">
+                            <div className="bg-body-tertiary border rounded d-flex align-items-center justify-content-center me-3" style={{ width: '80px', height: '80px', flexShrink: 0 }}>
+                              {item.imageUrl ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} /> : <i className="bi bi-image text-muted fs-3"></i>}
+                            </div>
+                            <div className="flex-grow-1">
+                              <h6 className="fw-bold text-body mb-1">{item.name}</h6>
+                              <div className="fw-bold text-primary">${item.basePrice.toFixed(2)}</div>
+                            </div>
+                            <div className="d-flex flex-column flex-sm-row gap-2">
+                              <button className="btn btn-sm btn-primary rounded-pill fw-semibold px-3" onClick={() => setSelectedProduct(item)}>View</button>
+                              <button className="btn btn-sm btn-outline-danger rounded-pill px-3" onClick={() => toggleLike(item)}><i className="bi bi-trash3"></i></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1619,6 +1674,35 @@ function App() {
         )}
       </div>
 
+      {/* --- BOTTOM MOBILE NAVIGATION BAR --- */}
+      {currentView !== 'checkout' && (
+        <div className="position-fixed bottom-0 start-0 w-100 bg-body shadow-lg border-top d-flex justify-content-around align-items-center py-2 d-md-none" style={{zIndex: 1030}}>
+          <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'store' ? 'text-primary' : 'text-muted'}`} onClick={() => setCurrentView('store')}>
+            <i className={`bi ${currentView === 'store' ? 'bi-house-fill' : 'bi-house'} fs-5 mb-1`}></i>
+            <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Home</span>
+          </button>
+          
+          <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'wishlist' ? 'text-primary' : 'text-muted'} position-relative`} onClick={() => setCurrentView('wishlist')}>
+            <i className={`bi ${currentView === 'wishlist' ? 'bi-heart-fill' : 'bi-heart'} fs-5 mb-1`}></i>
+            <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Liked</span>
+            {likedItems.length > 0 && <span className="position-absolute badge rounded-pill bg-danger" style={{top: '0', right: '10px', fontSize: '0.55rem'}}>{likedItems.length}</span>}
+          </button>
+
+          <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'customer_orders' ? 'text-primary' : 'text-muted'}`} onClick={() => {
+              if (!userRole) {
+                setIsSignUpMode(false);
+                setShowLoginModal(true);
+              } else {
+                fetchOrders();
+                setCurrentView('customer_orders');
+              }
+            }}>
+            <i className={`bi ${currentView === 'customer_orders' ? 'bi-bag-fill' : 'bi-bag'} fs-5 mb-1`}></i>
+            <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Orders</span>
+          </button>
+        </div>
+      )}
+
       {/* --- MOQ WARNING MODAL --- */}
       {moqWarning && (
         <div className="position-fixed top-50 start-50 translate-middle" style={{ zIndex: 1200, width: '90%', maxWidth: '400px' }}>
@@ -1727,49 +1811,6 @@ function App() {
         />
       )}
 
-      {/* --- CSS Slide Out Wishlist --- */}
-      <>
-        <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark" style={{ zIndex: 1040, opacity: isWishlistOpen ? 0.5 : 0, visibility: isWishlistOpen ? 'visible' : 'hidden', transition: 'opacity 0.3s ease, visibility 0.3s ease' }} onClick={() => setIsWishlistOpen(false)}></div>
-        <div className="position-fixed top-0 end-0 h-100 bg-body shadow-lg d-flex flex-column" style={{ width: '400px', zIndex: 1050, transform: isWishlistOpen ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-          
-          <div className="d-flex justify-content-between align-items-center p-4 border-bottom">
-            <h5 className="mb-0 fw-bold text-body"><i className="bi bi-heart-fill text-danger me-2"></i>Wishlist</h5>
-            <button className="btn-close" onClick={() => setIsWishlistOpen(false)}></button>
-          </div>
-
-          <div className="p-4 flex-grow-1 overflow-auto checkout-scroll">
-            {likedItems.length === 0 ? <div className="text-center text-muted mt-5">Your wishlist is empty.</div> : (
-              <div className="d-flex flex-column">
-                {likedItems.map((item) => (
-                  <div key={item.id} className="d-flex align-items-center mb-3 p-3 border rounded bg-body-tertiary">
-                    <div className="bg-body rounded border d-flex align-items-center justify-content-center me-3 overflow-hidden" style={{ width: '60px', height: '60px', flexShrink: 0 }}>
-                      {item.imageUrl ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <i className="bi bi-image text-muted"></i>}
-                    </div>
-                    <div className="flex-grow-1">
-                      <div className="fw-bold text-body mb-1">{item.name}</div>
-                      <div className="fw-semibold text-primary">${item.basePrice.toFixed(2)}</div>
-                    </div>
-                    <button 
-                      className="btn btn-sm btn-primary rounded-pill ms-2 fw-semibold" 
-                      onClick={() => { 
-                        setIsWishlistOpen(false); 
-                        setSelectedProduct(item); 
-                      }}
-                    >
-                      View
-                    </button>
-                    <button className="btn btn-link text-danger p-0 ms-3" onClick={() => toggleLike(item)}>
-                      <i className="bi bi-trash3 fs-5"></i>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-        </div>
-      </>
-
       {/* --- CSS Slide Out Cart --- */}
       <>
         <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark" style={{ zIndex: 1040, opacity: isCartOpen ? 0.5 : 0, visibility: isCartOpen ? 'visible' : 'hidden', transition: 'opacity 0.3s ease, visibility 0.3s ease' }} onClick={() => setIsCartOpen(false)}></div>
@@ -1828,6 +1869,9 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* --- Mobile Bottom Spacer --- */}
+      <div className="d-block d-md-none" style={{height: '80px'}}></div>
 
     </div>
   );
