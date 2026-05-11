@@ -680,7 +680,7 @@ function App() {
     };
     
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/checkout', {
+      const response = await fetch('https://b2b-apparel-backend.onrender.com/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -700,7 +700,7 @@ function App() {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/orders');
+      const response = await fetch('https://b2b-apparel-backend.onrender.com/api/orders');
       const data = await response.json();
       setOrderHistory(data);
     } catch (error) {
@@ -725,7 +725,7 @@ function App() {
       description: newProductDesc, stock: parseInt(newProductStock) || 0, sizes: selectedFormSizes.join(', '), colors: selectedFormColors.join(', ')
     };
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const response = await fetch('https://b2b-apparel-backend.onrender.com/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (response.ok) {
         const addedProduct = await response.json();
         setProducts([...products, addedProduct]);
@@ -740,7 +740,7 @@ function App() {
 
   const handleSaveEdit = async (productId, updatedPayload) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/products/${productId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedPayload) });
+      const response = await fetch(`https://b2b-apparel-backend.onrender.com/api/products/${productId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedPayload) });
       if (response.ok) {
         const updatedProduct = await response.json();
         setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
