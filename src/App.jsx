@@ -2,6 +2,14 @@ import { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useCart } from './context/CartContext';
 import { createClient } from '@supabase/supabase-js';
+import ProductCard from './components/ProductCard.jsx';
+import EditProfile from './components/EditProfile.jsx';
+import ChangePassword from './components/ChangePassword.jsx';
+import AddAddress from './components/AddAddress.jsx';
+import AddPayment from './components/AddPayment.jsx';
+import EditAddress from './components/EditAddress.jsx';
+import EditPayment from './components/EditPayment.jsx';
+import OrderSuccess from './components/OrderSuccess.jsx';
 
 // --- INITIALIZE SUPABASE CLIENT ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -337,51 +345,14 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
   );
 }
 
-// --- ProductCard ---
-// --- ProductCard ---
-function ProductCard({ product, viewMode, onViewDetails, isLiked, onToggleLike }) {
-  const colClass = viewMode === 'grid' ? "col-md-4 mb-4" : "col-12 mb-4";
-  const cardLayout = viewMode === 'list' ? "flex-row" : "flex-column";
-
-  return (
-    <div className={colClass}>
-      <div className={`card h-100 shadow-sm border-0 rounded-4 overflow-hidden d-flex ${cardLayout} bg-body`}>
-        <div className={`position-relative bg-body-tertiary flex-shrink-0 ${viewMode === 'list' ? 'list-view-img' : 'grid-view-img'}`} style={{cursor: 'pointer', backgroundImage: `url(${product.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center'}} onClick={() => onViewDetails(product)}>
-          <span className="badge bg-success position-absolute top-0 start-0 m-3">NEW</span>
-          <button 
-            className="btn bg-body rounded-circle shadow-sm p-0 position-absolute top-0 end-0 m-3 d-flex align-items-center justify-content-center border" 
-            style={{width: '35px', height: '35px', zIndex: 5, transition: 'transform 0.2s ease'}} 
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            onClick={(e) => { 
-              e.stopPropagation();
-              onToggleLike(product); 
-            }}
-          >
-            <i className={`bi ${isLiked ? 'bi-heart-fill text-danger' : 'bi-heart text-muted'}`}></i>
-          </button>
-
-          {!product.imageUrl && <div className="d-flex align-items-center justify-content-center h-100 text-muted"><i className="bi bi-image fs-1"></i></div>}
-        </div>
-        <div className="card-body d-flex flex-column flex-grow-1">
-          <div className="d-flex justify-content-between align-items-start">
-            <div><small className="text-muted text-uppercase fw-bold">{product.category}</small><h5 className="card-title fw-bold mb-1 mt-1" style={{cursor: 'pointer'}} onClick={() => onViewDetails(product)}>{product.name}</h5></div>
-          </div>
-          <div className="mb-3"><span className="fw-bold fs-4">${product.basePrice.toFixed(2)}</span><span className="text-muted text-decoration-line-through ms-2 small">${(product.basePrice * 1.3).toFixed(2)}</span></div>
-          <div className={`mt-auto ${viewMode === 'list' ? 'w-50 ms-auto' : ''}`}><button className="btn btn-primary btn-sm fw-bold w-100 rounded-pill py-2" onClick={() => onViewDetails(product)}>Buy</button></div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // --- Main App ---
 function App() {
   const { cart, totalQuantity, totalPrice, updateQuantity, removeFromCart, clearCart, reloadCart } = useCart();
   
   const [paymentMethod, setPaymentMethod] = useState('full');
-  const [orderResponse, setOrderResponse] = useState(null);
+  const [successOrderDetails, setSuccessOrderDetails] = useState(null);
   const [currentView, setCurrentView] = useState('store'); 
+  
 
   // Dark Mode State
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('theme') === 'dark');
@@ -404,9 +375,23 @@ function App() {
   
   useEffect(() => {
     const email = localStorage.getItem('userEmail');
-    localStorage.setItem(getLikedKey(email), JSON.stringify(likedItems));
+    
+    // --- FIX: Strip out massive Base64 images before saving to local storage ---
+    const optimizedWishlist = likedItems.map(item => {
+      // If the image string is over 1000 characters, it's a massive Base64 file. Drop it.
+      const isHugeFile = item.imageUrl && item.imageUrl.length > 1000;
+      return isHugeFile ? { ...item, imageUrl: null } : item;
+    });
+
+    try {
+      localStorage.setItem(getLikedKey(email), JSON.stringify(optimizedWishlist));
+    } catch (error) {
+      console.warn("Storage quota still exceeded even after optimization!", error);
+    }
   }, [likedItems]);
 
+  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
+  
   // Customer Orders State
   const [activeOrderTab, setActiveOrderTab] = useState('All');
   const orderTabs = ['All', 'To pay', 'To Ship', 'To Receive', 'To Review', 'Returns'];
@@ -440,6 +425,16 @@ function App() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const [moqWarning, setMoqWarning] = useState('');
+  
+  // --- NEW: Global Toast Notification State ---
+  const [notification, setNotification] = useState('');
+
+  const showNotification = (message) => {
+    setNotification(message);
+    setTimeout(() => {
+      setNotification('');
+    }, 3000); // Auto-dismiss after 3 seconds
+  };
   const [orderHistory, setOrderHistory] = useState([]);
   const [products, setProducts] = useState([]);
 
@@ -453,6 +448,8 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [addressToEdit, setAddressToEdit] = useState(null);
+  const [paymentToEdit, setPaymentToEdit] = useState(null);
   
   // Advanced Auth States
   const [signupName, setSignupName] = useState('');
@@ -673,26 +670,83 @@ function App() {
     setCurrentView('store'); 
   };
 
+  const handleProfileUpdate = async (newName, newEmail) => {
+    // 1. Prepare what needs to be updated
+    const updates = {};
+    if (newName !== userName) updates.data = { full_name: newName };
+    if (newEmail !== userEmail) {
+        setUserEmail(newEmail);
+        localStorage.setItem('userEmail', newEmail);
+        showNotification("Email update initiated! Check your inbox for a verification link.");
+      } else {
+        showNotification("Profile details successfully updated!");
+      }
+
+    // 2. Send to Supabase if changes exist
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase.auth.updateUser(updates);
+      if (error) throw error; // The EditProfile component will catch and display this
+      
+      // 3. Update local state immediately
+      if (newName !== userName) {
+        setUserName(newName);
+        localStorage.setItem('userName', newName);
+      }
+      
+      if (newEmail !== userEmail) {
+        setUserEmail(newEmail);
+        localStorage.setItem('userEmail', newEmail);
+        alert("Email update initiated! Please check your inbox for a verification link.");
+      } else {
+        alert("Profile details successfully updated!");
+      }
+    }
+    
+    // 4. Return to the main profile screen
+    setCurrentView('profile');
+  };
+
+  const handlePasswordUpdate = async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    if (error) throw error; // Throws to the component to show the red error box
+    
+    showNotification("Password successfully updated!");
+    setCurrentView('profile');
+  };
+
   const simulatePayment = async () => {
     setIsProcessingPayment(true);
     setTimeout(async () => {
       setIsProcessingPayment(false);
+
+      // 1. Run the checkout first so it can grab the current input data
+      await handleCheckout();
+
+      // 2. Clear the form data AFTER checkout is complete
       setCheckoutPhase('shipping');
       setCardNumber(''); setCardExpiry(''); setCardCvc('');
       setSelectedSavedAddress(null);
       setSelectedSavedPayment(null);
-      await handleCheckout();
     }, 2000);
   };
 
   const handleCheckout = async () => {
     const backendMappedMethod = paymentArrangement === 100 ? 'full' : 'down_payment';
-    const payload = { 
-      items: cart, 
+    // In handleCheckout(), update the payload object to this:
+    const payload = {
+      items: cart,
       payment_method: backendMappedMethod,
-      customer_email: userEmail 
+      customer_email: userEmail,
+      customer_name: userName,                    // ← add this
+      payment_percentage: paymentArrangement,     // ← add this (sends 100/50/30/20)
+      shipping_method: shippingMethod,            // ← add this (sends 'standard'/'express'/'sameday')
     };
+
     
+
     try {
       const response = await fetch('https://b2b-apparel-backend.onrender.com/api/checkout', {
         method: 'POST',
@@ -700,12 +754,59 @@ function App() {
         body: JSON.stringify(payload),
       });
       const data = await response.json();
+
       if (response.ok) {
-        setOrderResponse(data.order_summary);
+        // --- CAPTURE DATA FOR SUCCESS SCREEN ---
+        let last4 = '';
+        if (selectedPaymentType === 'credit') {
+          if (selectedSavedPayment) {
+            const savedCard = savedPayments.find(p => p.id === selectedSavedPayment);
+            last4 = savedCard ? savedCard.last4 : '';
+          } else {
+            last4 = cardNumber.slice(-4) || 'XXXX';
+          }
+        }
+
+        let deliveryAddress = 'Standard Billing Address';
+        if (selectedSavedAddress) {
+          const savedAddr = savedAddresses.find(a => a.id === selectedSavedAddress);
+          deliveryAddress = savedAddr ? `${savedAddr.address}, ${savedAddr.city}` : deliveryAddress;
+        }
+
+        const successData = {
+          orderId: data.order_summary?.id || Math.floor(Math.random() * 90000) + 10000,
+          email: userEmail || 'Guest User',
+          shipping: shippingMethod,
+          paymentType: selectedPaymentType,
+          cardLast4: last4,
+          address: deliveryAddress
+        };
+
+        setSuccessOrderDetails(successData);
+
+        // --- NEW: TRIGGER AUTOMATION WEBHOOK FOR EMAIL/INVOICE ---
+        const webhookPayload = {
+          ...successData,
+          customerName: userName,
+          items: cart,
+          totalDue: finalTotalDue,
+          amountPaid: amountToPayToday,
+          balance: finalTotalDue - amountToPayToday,
+          isFullyPaid: paymentArrangement === 100
+        };
+
+        // Fire and forget (doesn't hold up the UI)
+        fetch('https://hook.eu1.make.com/rkzx9r8youzm9t7gwwxkhxtr7i5iocma', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(webhookPayload)
+        }).catch(err => console.error("Receipt automation failed:", err));
+
         if (clearCart) clearCart(); 
-        setCurrentView('store'); 
+        setCurrentView('order_success'); // Route to the new screen
+
       } else {
-        alert(`Checkout Failed: ${data.detail}`);
+        showNotification(`Checkout Failed: ${data.detail}`);
       }
     } catch (error) {
       console.error("Error connecting to server:", error);
@@ -769,23 +870,80 @@ function App() {
   };
 
   // --- NEW: Functions to add data directly to DB ---
-  const handleAddAddress = async () => {
-    const name = window.prompt("Enter location name (e.g., Home, Office):");
-    if (!name) return;
-    const address = window.prompt("Enter street address:");
-    const newAddr = { user_email: userEmail, name, address, city: 'City', state: 'State', zip: '00000', is_default: false };
+  const handleSaveNewAddress = async (addressData) => {
+    // Attach the current user's email to the address payload
+    const newAddr = { ...addressData, user_email: userEmail };
     
+    // Push to Supabase
     const { data, error } = await supabase.from('saved_addresses').insert([newAddr]).select();
-    if (!error && data) setSavedAddresses([...savedAddresses, data[0]]);
+    
+    if (error) throw error; // Throws error back to the component to display
+    
+    // Update local state to immediately show the new address
+    if (data) {
+      setSavedAddresses([...savedAddresses, data[0]]);
+    }
+    
+    showNotification("Address successfully added!");
+    setCurrentView('profile'); // Return to profile
   };
 
-  const handleAddPayment = async () => {
-    const last4 = window.prompt("Enter last 4 digits of card:");
-    if (!last4) return;
-    const newPay = { user_email: userEmail, type: 'Visa', last4, expiry: '12/28', is_default: false };
+  const handleSaveNewPayment = async (paymentData) => {
+    // Attach the current user's email to the payload
+    const newPay = { ...paymentData, user_email: userEmail };
     
+    // Push to Supabase (using the insert policy we created earlier)
     const { data, error } = await supabase.from('saved_payments').insert([newPay]).select();
-    if (!error && data) setSavedPayments([...savedPayments, data[0]]);
+    
+    if (error) throw error; // Throws error back to the component to display
+    
+    // Update local state to immediately show the new card
+    if (data) {
+      setSavedPayments([...savedPayments, data[0]]);
+    }
+    
+    showNotification("Payment method successfully added!");
+    setCurrentView('profile'); // Return to profile
+  };
+
+  // --- EDIT / DELETE ADDRESSES ---
+  const handleUpdateAddress = async (id, updatedData) => {
+    const { data, error } = await supabase.from('saved_addresses').update(updatedData).eq('id', id).select();
+    if (error) throw error;
+    if (data) setSavedAddresses(savedAddresses.map(addr => addr.id === id ? data[0] : addr));
+    showNotification("Address updated successfully!");
+    setCurrentView('profile');
+  };
+
+  const handleDeleteAddress = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this address?")) return;
+    const { error } = await supabase.from('saved_addresses').delete().eq('id', id);
+    if (error) {
+      showNotification(`Error: ${error.message}`);
+    } else {
+      setSavedAddresses(savedAddresses.filter(addr => addr.id !== id));
+      showNotification("Address removed.");
+    }
+  };
+
+  // --- EDIT / DELETE PAYMENTS ---
+  const handleUpdatePayment = async (id, updatedData) => {
+    const { data, error } = await supabase.from('saved_payments').update(updatedData).eq('id', id).select();
+    if (error) throw error;
+    if (data) setSavedPayments(savedPayments.map(pay => pay.id === id ? data[0] : pay));
+    showNotification("Payment method updated!");
+    setCurrentView('profile');
+  };
+
+  const handleDeletePayment = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this payment method?")) return;
+    const { error } = await supabase.from('saved_payments').delete().eq('id', id);
+    if (error) {
+      showNotification(`Error: ${error.message}`);
+    } else {
+      setSavedPayments(savedPayments.filter(pay => pay.id !== id));
+      showNotification("Payment method removed.");
+    }
   };
 
   const toggleFormCheckbox = (item, stateArray, setStateArray) => setStateArray(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
@@ -803,6 +961,25 @@ function App() {
   else if (sortOption === 'name-asc') displayProducts.sort((a, b) => a.name.localeCompare(b.name));
 
   const myCustomerOrders = orderHistory.filter(order => order.customer_email === userEmail);
+
+  // --- NEW: Safe Tab Filtering Logic ---
+  const filteredCustomerOrders = myCustomerOrders.filter(order => {
+    if (activeOrderTab === 'All') return true;
+    
+    // Safely convert the backend data to a true number
+    const balance = Number(order.balance_due) || 0;
+    const status = order.status || 'Processing'; // Fallback if backend doesn't have statuses yet
+
+    if (activeOrderTab === 'To pay') return balance > 0;
+    if (activeOrderTab === 'To Ship') return balance <= 0 && status === 'Processing';
+    
+    // Safety catches for the future tabs (so they don't break the UI)
+    if (activeOrderTab === 'To Receive') return status === 'Shipped';
+    if (activeOrderTab === 'To Review') return status === 'Delivered';
+    if (activeOrderTab === 'Returns') return status === 'Returned';
+    
+    return false;
+  });
 
   return (
     <div className="bg-body-tertiary min-vh-100 pb-5">
@@ -1296,9 +1473,13 @@ function App() {
                         key={product.id} 
                         product={product} 
                         viewMode={viewMode} 
-                        onViewDetails={setSelectedProduct} 
+                        
+                        /* --- FIX: Wrap these two in arrow functions --- */
+                        onViewDetails={() => setSelectedProduct(product)} 
+                        onToggleLike={() => toggleLike(product)}
+                        /* ---------------------------------------------- */
+                        
                         isLiked={!!likedItems.find(i => i.id === product.id)}
-                        onToggleLike={toggleLike}
                       />
                     ))}
                   </div>
@@ -1332,12 +1513,7 @@ function App() {
                   </div>
 
                   <div className="d-flex flex-column gap-3">
-                    {myCustomerOrders.filter(order => {
-                        if (activeOrderTab === 'All') return true;
-                        if (activeOrderTab === 'To pay') return order.balance_due > 0;
-                        if (activeOrderTab === 'To Ship') return order.balance_due === 0; 
-                        return false; 
-                    }).length === 0 ? (
+                    {filteredCustomerOrders.length === 0 ? (
                       <div className="text-center py-5 bg-body rounded-4 shadow-sm border">
                         <i className="bi bi-bag-x text-muted mb-3 d-block" style={{ fontSize: '4rem' }}></i>
                         <h5 className="fw-bold text-body">No orders found</h5>
@@ -1345,12 +1521,7 @@ function App() {
                         <button className="btn btn-primary rounded-pill px-4 fw-semibold mt-2" onClick={() => setCurrentView('store')}>Continue Shopping</button>
                       </div>
                     ) : (
-                      myCustomerOrders.filter(order => {
-                          if (activeOrderTab === 'All') return true;
-                          if (activeOrderTab === 'To pay') return order.balance_due > 0;
-                          if (activeOrderTab === 'To Ship') return order.balance_due === 0;
-                          return false;
-                      }).map(order => (
+                      filteredCustomerOrders.map(order => (
                         <div className="card border shadow-sm rounded-4 p-4 bg-body" key={order.id}>
                           <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
                             <span className="fw-bold text-muted"><i className="bi bi-shop me-2"></i>B2B Apparel • Order #{order.id}</span>
@@ -1448,8 +1619,8 @@ function App() {
                         <h3 className="fw-bold text-body">{userName}</h3>
                         <p className="text-muted mb-4">{userEmail}</p>
                         <div className="d-flex justify-content-center gap-3">
-                          <button className="btn btn-outline-primary fw-semibold px-4 rounded-pill">Edit Details</button>
-                          <button className="btn btn-outline-secondary fw-semibold px-4 rounded-pill">Change Password</button>
+                          <button className="btn btn-outline-primary fw-semibold px-4 rounded-pill" onClick={() => setCurrentView('edit_profile')}>Edit Details</button>
+                          <button className="btn btn-outline-secondary fw-semibold px-4 rounded-pill" onClick={() => setCurrentView('change_password')}>Change Password</button>
                         </div>
                      </div>
                    </div>
@@ -1465,12 +1636,12 @@ function App() {
                               <div className="text-muted small">{addr.address}<br/>{addr.city}, {addr.state} {addr.zip}</div>
                             </div>
                             <div>
-                              <button className="btn btn-sm btn-outline-secondary me-2"><i className="bi bi-pencil"></i></button>
-                              <button className="btn btn-sm btn-outline-danger"><i className="bi bi-trash"></i></button>
+                              <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => { setAddressToEdit(addr); setCurrentView('edit_address'); }}><i className="bi bi-pencil"></i></button>
+                              <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteAddress(addr.id)}><i className="bi bi-trash"></i></button>
                             </div>
                           </div>
                         ))}
-                        <button className="btn btn-outline-primary fw-semibold rounded-pill w-100 mt-2" onClick={handleAddAddress}><i className="bi bi-plus-circle me-2"></i> Add New Address</button>
+                        <button className="btn btn-outline-primary fw-semibold rounded-pill w-100 mt-2" onClick={() => setCurrentView('add_address')}><i className="bi bi-plus-circle me-2"></i> Add New Address</button>
                      </div>
                    </div>
 
@@ -1488,17 +1659,80 @@ function App() {
                               </div>
                             </div>
                             <div>
-                              <button className="btn btn-sm btn-outline-secondary me-2"><i className="bi bi-pencil"></i></button>
-                              <button className="btn btn-sm btn-outline-danger"><i className="bi bi-trash"></i></button>
-                            </div>
+                              <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => { setPaymentToEdit(pay); setCurrentView('edit_payment'); }}><i className="bi bi-pencil"></i></button>
+                              <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeletePayment(pay.id)}><i className="bi bi-trash"></i></button>
+                          </div>
                           </div>
                         ))}
-                        <button className="btn btn-outline-primary fw-semibold rounded-pill w-100 mt-2" onClick={handleAddPayment}><i className="bi bi-plus-circle me-2"></i> Add New Payment Method</button>
+                        <button className="btn btn-outline-primary fw-semibold rounded-pill w-100 mt-2" onClick={() => setCurrentView('add_payment')}><i className="bi bi-plus-circle me-2"></i> Add New Payment Method</button>
                      </div>
                    </div>
 
                  </div>
                </div>
+            )}
+
+            {/* --- EDIT PROFILE VIEW --- */}
+            {currentView === 'edit_profile' && userRole && (
+              <EditProfile 
+                initialName={userName} 
+                initialEmail={userEmail} 
+                onSave={handleProfileUpdate} 
+                onCancel={() => setCurrentView('profile')} 
+              />
+            )}
+
+            {/* --- CHANGE PASSWORD VIEW --- */}
+            {currentView === 'change_password' && userRole && (
+              <ChangePassword 
+                onSave={handlePasswordUpdate} 
+                onCancel={() => setCurrentView('profile')} 
+              />
+            )}
+
+            {/* --- ADD ADDRESS VIEW --- */}
+            {currentView === 'add_address' && userRole && (
+              <AddAddress 
+                onSave={handleSaveNewAddress} 
+                onCancel={() => setCurrentView('profile')} 
+              />
+            )}
+
+            {/* --- ADD PAYMENT VIEW --- */}
+            {currentView === 'add_payment' && userRole && (
+              <AddPayment 
+                onSave={handleSaveNewPayment} 
+                onCancel={() => setCurrentView('profile')} 
+              />
+            )}
+
+            {/* --- EDIT ADDRESS VIEW --- */}
+            {currentView === 'edit_address' && userRole && addressToEdit && (
+              <EditAddress 
+                addressData={addressToEdit} 
+                onSave={handleUpdateAddress} 
+                onCancel={() => setCurrentView('profile')} 
+              />
+            )}
+
+            {/* --- EDIT PAYMENT VIEW --- */}
+            {currentView === 'edit_payment' && userRole && paymentToEdit && (
+              <EditPayment 
+                paymentData={paymentToEdit} 
+                onSave={handleUpdatePayment} 
+                onCancel={() => setCurrentView('profile')} 
+              />
+            )}
+
+            {/* --- ORDER SUCCESS VIEW --- */}
+            {currentView === 'order_success' && successOrderDetails && (
+              <OrderSuccess 
+                orderDetails={successOrderDetails}
+                onContinue={() => {
+                  setSuccessOrderDetails(null);
+                  setCurrentView('store');
+                }}
+              />
             )}
 
             {/* --- SUPPORT VIEW --- */}
@@ -1716,6 +1950,16 @@ function App() {
         </div>
       )}
 
+      {/* --- SLEEK TOAST NOTIFICATION --- */}
+      {notification && (
+        <div className="position-fixed top-0 start-50 translate-middle-x mt-4 animate-dropdown" style={{ zIndex: 1200 }}>
+          <div className="bg-dark text-white px-4 py-3 rounded-pill shadow-lg d-flex align-items-center gap-3 fw-semibold border border-secondary">
+            <i className="bi bi-check-circle-fill text-success fs-5"></i>
+            {notification}
+          </div>
+        </div>
+      )}
+
       {/* --- REFACTORED LOGIN / SIGNUP MODAL --- */}
       {showLoginModal && (
         <>
@@ -1854,21 +2098,6 @@ function App() {
           
         </div>
       </>
-
-      {orderResponse && (
-        <div className="position-fixed top-50 start-50 translate-middle animate-dropdown" style={{ zIndex: 1100, width: '90%', maxWidth: '500px' }}>
-          <div className="alert alert-success shadow-lg border-0 rounded-4">
-            <div className="d-flex justify-content-between">
-              <h5 className="alert-heading fw-bold"><i className="bi bi-check-circle-fill"></i> Order Processed!</h5>
-              <button className="btn-close" onClick={() => setOrderResponse(null)}></button>
-            </div>
-            <hr />
-            <p className="mb-1"><strong>Payment Status:</strong> {orderResponse.payment_status}</p>
-            <p className="mb-1"><strong>Amount Paid Today:</strong> ${orderResponse.amount_paid}</p>
-            <p className="mb-0"><strong>Remaining Balance:</strong> ${orderResponse.balance_due}</p>
-          </div>
-        </div>
-      )}
 
       {/* --- Mobile Bottom Spacer --- */}
       <div className="d-block d-md-none" style={{height: '80px'}}></div>
