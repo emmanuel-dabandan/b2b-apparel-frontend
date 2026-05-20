@@ -620,6 +620,87 @@ function CustomerOrderModal({ order, onClose, onUpdateOrder }) {
   );
 }
 
+// --- Leave a Review Modal ---
+function ReviewModal({ order, onClose, onSubmitReview }) {
+  const [rating, setRating] = useState(5);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [reviewImage, setReviewImage] = useState(null);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setReviewImage(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // Pass the review data back up to App.jsx
+    onSubmitReview(order.id, { rating, comment, reviewImage });
+  };
+
+  return (
+    <>
+      <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark opacity-50" style={{ zIndex: 1060 }} onClick={onClose}></div>
+      <div className="position-fixed top-50 start-50 translate-middle w-100 px-3 animate-dropdown" style={{ zIndex: 1070, maxWidth: '500px' }}>
+        <div className="card shadow-lg rounded-4 overflow-hidden border-0 bg-body">
+          <div className="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center py-3">
+            <span>Rate Order #{order.id}</span>
+            <button className="btn-close btn-close-white" onClick={onClose}></button>
+          </div>
+          
+          <div className="card-body p-4">
+            <form onSubmit={handleSubmit}>
+              
+              {/* Interactive Star Rating */}
+              <div className="text-center mb-4">
+                <div className="fw-bold text-muted mb-2">Tap to Rate</div>
+                <div className="d-flex justify-content-center gap-2 text-warning" style={{ fontSize: '2rem', cursor: 'pointer' }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <i 
+                      key={star}
+                      className={`bi ${star <= (hoverRating || rating) ? 'bi-star-fill' : 'bi-star'}`}
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      onClick={() => setRating(star)}
+                      style={{ transition: 'color 0.2s' }}
+                    ></i>
+                  ))}
+                </div>
+              </div>
+
+              {/* Text Review */}
+              <div className="mb-3">
+                <label className="form-label small fw-bold text-muted">Write a Review (Optional)</label>
+                <textarea 
+                  className="form-control bg-body-tertiary border-0 shadow-none text-body" 
+                  rows="3" 
+                  placeholder="How was the quality? Did it fit well?"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                ></textarea>
+              </div>
+
+              {/* Image Upload */}
+              <div className="mb-4">
+                <label className="form-label small fw-bold text-muted">Upload Photo (Optional)</label>
+                <div className="d-flex align-items-center gap-3">
+                  {reviewImage && <img src={reviewImage} alt="Preview" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} />}
+                  <input type="file" className="form-control bg-body-tertiary border-0 shadow-none text-body form-control-sm" accept="image/*" onChange={handleImageUpload} />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary w-100 fw-bold py-2 rounded-pill">Submit Review</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 // --- Main App ---
 function App() {
   const { cart, totalQuantity, totalPrice, updateQuantity, removeFromCart, clearCart, reloadCart } = useCart();
@@ -643,8 +724,13 @@ function App() {
   const [checkoutFirstName, setCheckoutFirstName] = useState('');
   const [checkoutLastName, setCheckoutLastName] = useState('');
   const [checkoutPhone, setCheckoutPhone] = useState('');
-
-  
+  const [orderToReview, setOrderToReview] = useState(null);
+  const handleReviewSubmit = (orderId, reviewData) => {
+    console.log("Submitting Review for Order:", orderId, reviewData);
+    showNotification("Thank you! Your review has been submitted.");
+    setOrderToReview(null);
+    // Future: Add fetch/Supabase insert here!
+  };
 
   // Wishlist Storage Logic
   const getLikedKey = (email) => email ? `b2b_liked_${email}` : 'b2b_liked_guest';
@@ -1970,9 +2056,16 @@ function App() {
                             </div>
                           </div>
                           <div className="d-flex justify-content-end gap-2 mt-4">
-                            {order.balance_due > 0 && <button className="btn btn-primary fw-semibold px-4 rounded-pill">Pay Balance</button>}
-                            <button className="btn btn-outline-secondary fw-semibold px-4 rounded-pill" onClick={() => setSelectedCustomerOrder(order)}>View Details</button>
-                          </div>
+  {order.balance_due > 0 && <button className="btn btn-primary fw-semibold px-4 rounded-pill">Pay Balance</button>}
+  
+  {order.status === 'Delivered' && (
+    <button className="btn btn-warning fw-semibold px-4 rounded-pill text-dark" onClick={() => setOrderToReview(order)}>
+      <i className="bi bi-star-fill me-2"></i>Rate Order
+    </button>
+  )}
+  
+  <button className="btn btn-outline-secondary fw-semibold px-4 rounded-pill" onClick={() => setSelectedCustomerOrder(order)}>View Details</button>
+</div>
                         </div>
                       ))
                     )}
@@ -2764,6 +2857,15 @@ function App() {
           order={selectedCustomerOrder} 
           onClose={() => setSelectedCustomerOrder(null)}
           onUpdateOrder={handleUpdateCustomerOrder} 
+        />
+      )}
+
+      {/* 👇 Add this near your CustomerOrderModal 👇 */}
+      {orderToReview && (
+        <ReviewModal 
+          order={orderToReview} 
+          onClose={() => setOrderToReview(null)}
+          onSubmitReview={handleReviewSubmit}
         />
       )}
 

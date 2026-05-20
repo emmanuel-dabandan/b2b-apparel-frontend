@@ -30,6 +30,17 @@ export default function ProductCard({ product, viewMode, onViewDetails, isLiked,
             <div><small className="text-muted text-uppercase fw-bold">{product.category}</small><h5 className="card-title fw-bold mb-1 mt-1" style={{cursor: 'pointer'}} onClick={() => onViewDetails(product)}>{product.name}</h5></div>
           </div>
           <div className="mb-3"><span className="fw-bold fs-4">${product.basePrice.toFixed(2)}</span><span className="text-muted text-decoration-line-through ms-2 small">${(product.basePrice * 1.3).toFixed(2)}</span></div>
+          {/* Star Rating Display */}
+<div className="d-flex align-items-center mb-2">
+  <div className="text-warning d-flex gap-1" style={{ fontSize: '0.85rem' }}>
+    <i className="bi bi-star-fill"></i>
+    <i className="bi bi-star-fill"></i>
+    <i className="bi bi-star-fill"></i>
+    <i className="bi bi-star-fill"></i>
+    <i className="bi bi-star-half"></i>
+  </div>
+  <span className="text-muted small ms-2 fw-semibold">(4.5)</span>
+</div>
           <div className={`mt-auto ${viewMode === 'list' ? 'w-50 ms-auto' : ''}`}><button className="btn btn-primary btn-sm fw-bold w-100 rounded-pill py-2" onClick={() => onViewDetails(product)}>Buy</button></div>
         </div>
       </div>
