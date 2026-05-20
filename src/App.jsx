@@ -486,6 +486,140 @@ function AdminOrderModal({ order, onClose, onUpdateFulfillment }) {
   );
 }
 
+// --- Customer Order Details Modal ---
+// --- Customer Order Details Modal ---
+function CustomerOrderModal({ order, onClose, onUpdateOrder }) {
+  const isFulfilled = order.status === 'Shipped' || order.fulfillment_status === 'Fulfilled';
+  
+  // Edit States
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(order.customer_name || '');
+  const [editPhone, setEditPhone] = useState(order.customer_phone || '');
+  const [editAddress, setEditAddress] = useState(order.deliveryAddress || order.shipping_address || '');
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    onUpdateOrder(order.id, {
+      customer_name: editName,
+      customer_phone: editPhone,
+      deliveryAddress: editAddress,
+      shipping_address: editAddress
+    });
+    setIsEditing(false);
+  };
+
+  // Safely grab data (handling different naming conventions)
+  const shippingMethod = order.shipping || order.shipping_method || 'Standard Delivery';
+  const paymentMethod = order.paymentType || order.payment_type || order.payment_method || 'Credit / Debit Card';
+
+  return (
+    <>
+      <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark opacity-50" style={{ zIndex: 1060 }} onClick={onClose}></div>
+      <div className="position-fixed top-50 start-50 translate-middle w-100 px-3 animate-dropdown" style={{ zIndex: 1070, maxWidth: '650px' }}>
+        <div className="card shadow-lg rounded-4 overflow-hidden border-0 bg-body">
+          <div className="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center py-3">
+            <span>Order #{order.id} Summary</span>
+            <button className="btn-close btn-close-white" onClick={onClose}></button>
+          </div>
+          
+          <div className="card-body p-4" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            
+            {/* Tracking Banner */}
+            {isFulfilled && order.tracking_number && (
+              <div className="alert alert-success border-0 mb-4 d-flex align-items-center gap-3 shadow-sm rounded-3">
+                <i className="bi bi-box-seam fs-3"></i>
+                <div>
+                  <div className="fw-bold mb-1">Your order has shipped!</div>
+                  <div className="small">Carrier: <strong>{order.carrier}</strong> | Tracking: <strong>{order.tracking_number}</strong></div>
+                </div>
+              </div>
+            )}
+
+            {/* Customer & Shipping Details */}
+            <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+              <h6 className="fw-bold mb-0 text-body">Shipping Details</h6>
+              {!isFulfilled && !isEditing && (
+                <button className="btn btn-sm btn-outline-primary fw-bold" onClick={() => setIsEditing(true)}>
+                  <i className="bi bi-pencil-square me-1"></i>Edit
+                </button>
+              )}
+            </div>
+
+            <div className="bg-body-tertiary p-3 rounded border mb-4">
+              {isEditing ? (
+                <form onSubmit={handleSave} className="animate-view">
+                  <div className="row g-2 mb-2">
+                    <div className="col-md-6">
+                      <label className="form-label small fw-bold text-muted mb-1">Full Name</label>
+                      <input type="text" className="form-control form-control-sm" value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small fw-bold text-muted mb-1">Phone Number</label>
+                      <input type="tel" className="form-control form-control-sm" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="e.g. +63 912 345 6789" />
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold text-muted mb-1">Delivery Address</label>
+                    <textarea className="form-control form-control-sm" rows="2" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} required></textarea>
+                  </div>
+                  <div className="d-flex justify-content-end gap-2 mt-2">
+                    <button type="button" className="btn btn-sm btn-outline-secondary fw-semibold" onClick={() => setIsEditing(false)}>Cancel</button>
+                    <button type="submit" className="btn btn-sm btn-primary fw-semibold">Save Details</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <div className="small text-muted fw-bold">Customer</div>
+                    <div className="fw-semibold text-body">{order.customer_name || 'Guest User'}</div>
+                    <div className="small text-muted">{order.customer_phone || 'No phone provided'}</div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="small text-muted fw-bold">Delivery Address</div>
+                    <div className="small text-body">{order.deliveryAddress || order.shipping_address || 'Standard Address'}</div>
+                  </div>
+                  <div className="col-md-6 pt-2 border-top">
+                    <div className="small text-muted fw-bold">Shipping Method</div>
+                    <div className="small text-body text-capitalize">{shippingMethod}</div>
+                  </div>
+                  <div className="col-md-6 pt-2 border-top">
+                    <div className="small text-muted fw-bold">Payment Method</div>
+                    <div className="small text-body">{paymentMethod}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <h6 className="fw-bold mb-3 text-body border-bottom pb-2">Line Items</h6>
+            <ul className="list-group list-group-flush mb-4">
+              {order.items && order.items.map((item, idx) => (
+                <li key={idx} className="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent text-body border-light">
+                  <div>
+                    <div className="fw-bold">{item.name}</div>
+                    <div className="text-muted small">Qty: {item.quantity}</div>
+                  </div>
+                  <div className="fw-bold">${(item.price * item.quantity).toFixed(2)}</div>
+                </li>
+              ))}
+            </ul>
+
+            <h6 className="fw-bold mb-3 text-body border-bottom pb-2">Financial Summary</h6>
+            <div className="bg-body-tertiary p-3 rounded border">
+              <div className="d-flex justify-content-between mb-2 small"><span className="text-muted">Total Value:</span><span className="fw-bold text-body">${(order.final_total || 0).toFixed(2)}</span></div>
+              <div className="d-flex justify-content-between mb-2 small"><span className="text-muted">Amount Paid:</span><span className="fw-bold text-success">${(order.amount_paid || 0).toFixed(2)}</span></div>
+              <div className="d-flex justify-content-between pt-2 border-top mt-2">
+                <span className="fw-bold text-body">Balance Due:</span>
+                <span className={`fw-bold ${order.balance_due > 0 ? 'text-danger' : 'text-body'}`}>${(order.balance_due || 0).toFixed(2)}</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // --- Main App ---
 function App() {
   const { cart, totalQuantity, totalPrice, updateQuantity, removeFromCart, clearCart, reloadCart } = useCart();
@@ -505,6 +639,11 @@ function App() {
   const [selectedSavedPayment, setSelectedSavedPayment] = useState(null);
   const [billingSame, setBillingSame] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  // --- Checkout Contact States ---
+  const [checkoutFirstName, setCheckoutFirstName] = useState('');
+  const [checkoutLastName, setCheckoutLastName] = useState('');
+  const [checkoutPhone, setCheckoutPhone] = useState('');
+
   
 
   // Wishlist Storage Logic
@@ -568,6 +707,7 @@ function App() {
   const [shipCity, setShipCity] = useState('');
   const [shipState, setShipState] = useState('');
   const [shipZip, setShipZip] = useState('');
+  const [selectedCustomerOrder, setSelectedCustomerOrder] = useState(null);
 
   const [moqWarning, setMoqWarning] = useState('');
   
@@ -635,7 +775,33 @@ function App() {
     setSelectedAdminOrder(prev => ({ ...prev, ...updateData }));
     
     showNotification("Order tracking updated successfully!");
-    // NOTE: You will eventually add a fetch('PUT') request here to update your FastAPI backend!
+
+    const targetEmail = selectedAdminOrder?.customer_email || 'Guest User';
+    
+    const trackingPayload = {
+      orderId: orderId,
+      customerEmail: targetEmail,
+      trackingNumber: updateData.tracking_number,
+      carrier: updateData.carrier,
+      status: updateData.status
+    };
+
+    console.log("🚀 DEBUG - TRACKING PAYLOAD:", trackingPayload);
+
+    // 3. Fire to a NEW Make.com Webhook (Paste your new link here!)
+    fetch('https://hook.eu1.make.com/hp3nqbgzqzzotu6wrsubi71q223s0ll3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(trackingPayload)
+    }).catch(err => console.error("Tracking webhook failed:", err));
+  };
+
+  // Allows customers to edit their unfulfilled order details
+  const handleUpdateCustomerOrder = (orderId, updateData) => {
+    setOrderHistory(prev => prev.map(order => order.id === orderId ? { ...order, ...updateData } : order));
+    setSelectedCustomerOrder(prev => ({ ...prev, ...updateData }));
+    showNotification("Order details updated successfully!");
+    // Note: Future backend update via fetch/supabase goes here
   };
 
   const categoryOptions = ['T-Shirts', 'Hoodies', 'Outerwear', 'Bottoms', 'Other'];
@@ -914,30 +1080,34 @@ function App() {
     const backendMappedMethod = paymentArrangement === 100 ? 'full' : 'down_payment';
 
     // --- 1. FORMAT THE FULL DELIVERY ADDRESS FIRST ---
+    // --- 1. FORMAT THE FULL DELIVERY ADDRESS FIRST ---
     let finalDeliveryAddress = 'Standard Billing Address';
-    
     if (selectedSavedAddress) {
       const savedAddr = savedAddresses.find(a => a.id === selectedSavedAddress);
       finalDeliveryAddress = savedAddr ? `${savedAddr.address}, ${savedAddr.city}` : finalDeliveryAddress;
     } else if (shipStreet || shipCity) {
-      // Safely filters out empty boxes
       const addressParts = [shipFlat, shipStreet, shipCity, shipState, shipZip].filter(Boolean);
       finalDeliveryAddress = addressParts.join(', ');
     }
-
     if (!finalDeliveryAddress || finalDeliveryAddress.trim() === '') {
       finalDeliveryAddress = 'No Address Provided by Customer';
     }
 
-    // --- 2. BUILD THE BACKEND PAYLOAD ---
+    // --- 2. FORMAT THE CUSTOMER NAME ---
+    const finalCustomerName = checkoutFirstName || checkoutLastName 
+      ? `${checkoutFirstName} ${checkoutLastName}`.trim() 
+      : (userName || 'Guest User');
+
+    // --- 3. BUILD THE BACKEND PAYLOAD ---
     const payload = {
       items: cart,
       payment_method: backendMappedMethod,
       customer_email: userEmail,
-      customer_name: userName,
+      customer_name: finalCustomerName,       // <--- Now uses typed name
+      customer_phone: checkoutPhone,          // <--- Now sends phone number
       payment_percentage: paymentArrangement,
       shipping_method: shippingMethod,
-      shipping_address: finalDeliveryAddress // <--- THIS WAS MISSING!
+      shipping_address: finalDeliveryAddress  // <--- Now sends full address
     };
 
   
@@ -1444,16 +1614,26 @@ function App() {
                     <div className="bg-body p-4 rounded shadow-sm border-0 mb-4">
                       <h5 className="fw-bold text-body mb-4">Contact Details</h5>
                       <div className="row g-3">
-                        <div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">First Name</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" /></div>
-                        <div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">Last Name</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" /></div>
-                        <div className="col-12"><label className="form-label small fw-semibold text-muted mb-1">Email</label><input type="email" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={userEmail || ''} readOnly={!!userEmail}/></div>
-                        <div className="col-12"><label className="form-label small fw-semibold text-muted mb-1">Phone Number</label>
-                          <div className="input-group">
-                            <select className="form-select bg-body-tertiary border-0 shadow-none text-muted py-2" style={{maxWidth: '100px'}}><option>+ 91</option><option>+ 1</option><option>+ 63</option></select>
-                            <input type="tel" className="form-control bg-body-tertiary border-0 shadow-none py-2 ms-2 rounded text-body" />
-                          </div>
-                        </div>
-                      </div>
+  <div className="col-md-6">
+    <label className="form-label small fw-semibold text-muted mb-1">First Name</label>
+    <input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={checkoutFirstName} onChange={(e) => setCheckoutFirstName(e.target.value)} />
+  </div>
+  <div className="col-md-6">
+    <label className="form-label small fw-semibold text-muted mb-1">Last Name</label>
+    <input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={checkoutLastName} onChange={(e) => setCheckoutLastName(e.target.value)} />
+  </div>
+  <div className="col-12">
+    <label className="form-label small fw-semibold text-muted mb-1">Email</label>
+    <input type="email" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={userEmail || ''} readOnly={!!userEmail}/>
+  </div>
+  <div className="col-12">
+    <label className="form-label small fw-semibold text-muted mb-1">Phone Number</label>
+    <div className="input-group">
+      <select className="form-select bg-body-tertiary border-0 shadow-none text-muted py-2" style={{maxWidth: '100px'}}><option>+ 91</option><option>+ 1</option><option>+ 63</option></select>
+      <input type="tel" className="form-control bg-body-tertiary border-0 shadow-none py-2 ms-2 rounded text-body" value={checkoutPhone} onChange={(e) => setCheckoutPhone(e.target.value)} />
+    </div>
+  </div>
+</div>
                     </div>
 
                     <div className="bg-body p-4 rounded shadow-sm border-0 mb-5">
@@ -1791,7 +1971,7 @@ function App() {
                           </div>
                           <div className="d-flex justify-content-end gap-2 mt-4">
                             {order.balance_due > 0 && <button className="btn btn-primary fw-semibold px-4 rounded-pill">Pay Balance</button>}
-                            <button className="btn btn-outline-secondary fw-semibold px-4 rounded-pill">View Details</button>
+                            <button className="btn btn-outline-secondary fw-semibold px-4 rounded-pill" onClick={() => setSelectedCustomerOrder(order)}>View Details</button>
                           </div>
                         </div>
                       ))
@@ -2575,6 +2755,15 @@ function App() {
           onClose={() => setSelectedAdminOrder(null)} 
           onUpdateFulfillment={handleUpdateFulfillment}
           showNotification={showNotification}
+        />
+      )}
+
+      {/* 👇 Drop this right under your AdminOrderModal 👇 */}
+      {selectedCustomerOrder && (
+        <CustomerOrderModal 
+          order={selectedCustomerOrder} 
+          onClose={() => setSelectedCustomerOrder(null)}
+          onUpdateOrder={handleUpdateCustomerOrder} 
         />
       )}
 
