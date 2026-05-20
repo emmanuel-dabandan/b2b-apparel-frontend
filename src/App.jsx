@@ -2512,7 +2512,7 @@ function App() {
       {/* 3. INTERNAL LEDGER VIEW */}
       {currentView === 'admin_ledger' && (
          <div className="animate-view h-100 d-flex flex-column">
-           <h3 className="fw-bold text-body mb-4">Internal Financial Ledger</h3>
+           <h3 className="fw-bold text-body mb-4">Orders</h3>
            
            <div className="card shadow-sm border-0 rounded-4 overflow-hidden bg-body flex-grow-1 d-flex flex-column">
              <div className="card-header bg-dark text-white fw-bold py-3">
@@ -2612,7 +2612,7 @@ function App() {
                    <button className="btn btn-link text-white text-decoration-none px-0 fw-semibold me-3" onClick={() => setCurrentView('store')}>
                      <i className="bi bi-arrow-left"></i>
                    </button>
-                   Internal Order Ledger
+                   Orders
                  </div>
                  <div className="card-body p-0">
                    <table className="table table-hover mb-0 align-middle text-body">
