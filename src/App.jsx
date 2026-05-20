@@ -10,6 +10,8 @@ import AddPayment from './components/AddPayment.jsx';
 import EditAddress from './components/EditAddress.jsx';
 import EditPayment from './components/EditPayment.jsx';
 import OrderSuccess from './components/OrderSuccess.jsx';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 
 // --- INITIALIZE SUPABASE CLIENT ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -274,9 +276,23 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
-  const increment = () => setQuantity((prev) => prev + 1);
+  // Update these to handle empty states safely
+  const increment = () => setQuantity((prev) => (prev === '' ? 1 : prev + 1));
   const decrement = () => setQuantity((prev) => (prev > 1 ? prev - 1 : 1));
 
+  // Add these two new functions to control the typing
+  const handleQuantityChange = (e) => {
+    // Strip out letters or symbols, only allow numbers
+    const val = e.target.value.replace(/[^0-9]/g, '');
+    setQuantity(val === '' ? '' : parseInt(val, 10));
+  };
+
+  const handleQuantityBlur = () => {
+    // If the user deletes the number and clicks away, reset to 1
+    if (quantity === '' || quantity < 1) {
+      setQuantity(1);
+    }
+  };
   const rawSizes = product.sizes ? product.sizes.split(',').map(s => s.trim()).filter(s => s) : [];
   const sizes = rawSizes.length > 0 ? rawSizes : ['S', 'M', 'L', 'XL', 'XXL', '3XL']; 
   const colors = product.colors ? product.colors.split(',').map(c => c.trim()).filter(c => c) : [];
@@ -284,6 +300,7 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
   const safeStock = product.stock > 0 ? product.stock : 100;
   const needsSize = sizes.length > 0;
   const needsColor = colors.length > 0;
+  
   
   const isReadyToAdd = (!needsSize || selectedSize) && (!needsColor || selectedColor);
 
@@ -298,7 +315,7 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
     const sizeText = selectedSize ? ` (${selectedSize})` : '';
     const colorText = selectedColor ? ` - ${selectedColor}` : '';
     const configuredProduct = { ...product, id: `${product.id}-${selectedSize}-${selectedColor}`, name: `${product.name}${sizeText}${colorText}` };
-    addToCart(configuredProduct, parseInt(quantity));
+    addToCart(configuredProduct, parseInt(quantity) || 1);
     onClose(); 
   };
 
@@ -332,12 +349,136 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
                 <div className="mt-auto border-top pt-3">
                   <div className="d-flex justify-content-between align-items-center mb-3"><span className="fw-bold small text-muted">Stock Available: <span className="text-success">{safeStock}</span></span></div>
                   <div className="d-flex gap-3">
-                    <div className="input-group" style={{ width: '130px' }}><button className="btn btn-outline-secondary fw-bold" type="button" onClick={decrement}>-</button><input type="text" className="form-control text-center fw-bold" value={quantity} readOnly /><button className="btn btn-outline-secondary fw-bold" type="button" onClick={increment}>+</button></div>
-                    <button className={`btn ${canClick ? 'btn-primary' : 'btn-secondary'} fw-bold flex-grow-1 rounded-pill`} onClick={handleAdd} disabled={!canClick}>{buttonText}</button>
+<div className="input-group" style={{ width: '130px' }}>
+  <button className="btn btn-outline-secondary fw-bold" type="button" onClick={decrement}>-</button>
+  <input 
+    type="text" 
+    className="form-control text-center fw-bold shadow-none" 
+    value={quantity} 
+    onChange={handleQuantityChange}
+    onBlur={handleQuantityBlur}
+  />
+  <button className="btn btn-outline-secondary fw-bold" type="button" onClick={increment}>+</button>
+</div>                    <button className={`btn ${canClick ? 'btn-primary' : 'btn-secondary'} fw-bold flex-grow-1 rounded-pill`} onClick={handleAdd} disabled={!canClick}>{buttonText}</button>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// --- Admin Order Details Modal ---
+function AdminOrderModal({ order, onClose, onUpdateFulfillment }) {
+  const [trackingNumber, setTrackingNumber] = useState(order.tracking_number || '');
+  const [carrier, setCarrier] = useState(order.carrier || 'USPS');
+  
+  // Safely determine current status (Fallback to 'Unfulfilled' if not set yet)
+  const currentFulfillmentStatus = order.fulfillment_status || (order.status === 'Shipped' ? 'Fulfilled' : 'Unfulfilled');
+  const isFulfilled = currentFulfillmentStatus === 'Fulfilled';
+
+  const handleFulfill = (e) => {
+    e.preventDefault();
+    if (!trackingNumber) {
+      showNotification("Please enter a tracking number.");
+      return;
+    }
+    // Pass the data back up to the main App state
+    onUpdateFulfillment(order.id, { 
+      fulfillment_status: 'Fulfilled', 
+      status: 'Shipped', 
+      tracking_number: trackingNumber, 
+      carrier: carrier 
+    });
+  };
+
+  return (
+    <>
+      <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark opacity-50" style={{ zIndex: 1060 }} onClick={onClose}></div>
+      <div className="position-fixed top-50 start-50 translate-middle w-100 px-3 animate-dropdown" style={{ zIndex: 1070, maxWidth: '900px' }}>
+        <div className="card shadow-lg rounded-4 overflow-hidden border-0 bg-body">
+          <div className="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center py-3">
+            <span>Order #{order.id} Details</span>
+            <button className="btn-close btn-close-white" onClick={onClose}></button>
+          </div>
+          
+          <div className="card-body p-0 d-flex flex-column flex-md-row" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            
+            {/* Left Column: Items & Customer */}
+            <div className="col-md-7 p-4 border-end">
+              <h6 className="fw-bold mb-3 text-body">Customer Information</h6>
+              <div className="bg-body-tertiary p-3 rounded mb-4 border">
+                <div className="fw-semibold text-body">{order.customer_name || 'Guest Customer'}</div>
+                <div className="text-muted small mb-2">{order.customer_email || 'No email provided'}</div>
+                <div className="text-muted small"><i className="bi bi-geo-alt-fill me-1"></i> {order.shipping_address || 'Standard Shipping Address'}</div>
+              </div>
+
+              <h6 className="fw-bold mb-3 text-body">Line Items</h6>
+              <ul className="list-group list-group-flush border rounded mb-0">
+                {order.items && order.items.map((item, idx) => (
+                  <li key={idx} className="list-group-item bg-body-tertiary d-flex justify-content-between align-items-center p-3 text-body border-bottom-0 border-light">
+                    <div>
+                      <div className="fw-bold">{item.name}</div>
+                      <div className="text-muted small">${item.price?.toFixed(2)} x {item.quantity}</div>
+                    </div>
+                    <div className="fw-bold">${(item.price * item.quantity).toFixed(2)}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Right Column: Financials & Fulfillment */}
+            <div className="col-md-5 p-4 bg-body-tertiary">
+              <h6 className="fw-bold mb-3 text-body">Financial Summary</h6>
+              <div className="bg-body p-3 rounded mb-4 border shadow-sm">
+                <div className="d-flex justify-content-between mb-2 small"><span className="text-muted">Total Value:</span><span className="fw-bold text-body">${(order.final_total || 0).toFixed(2)}</span></div>
+                <div className="d-flex justify-content-between mb-2 small"><span className="text-muted">Amount Paid:</span><span className="fw-bold text-success">${(order.amount_paid || 0).toFixed(2)}</span></div>
+                <div className="d-flex justify-content-between pt-2 border-top mt-2">
+                  <span className="fw-bold text-body">Balance Due:</span>
+                  <span className={`fw-bold ${order.balance_due > 0 ? 'text-danger' : 'text-body'}`}>${(order.balance_due || 0).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <h6 className="fw-bold mb-3 text-body">Fulfillment Status</h6>
+              <div className="bg-body p-3 rounded border shadow-sm">
+                <div className="mb-3">
+                  <span className={`badge ${isFulfilled ? 'bg-success' : currentFulfillmentStatus === 'Partially Fulfilled' ? 'bg-warning text-dark' : 'bg-secondary'} px-3 py-2 fs-6 w-100`}>
+                    <i className={`bi ${isFulfilled ? 'bi-check-circle-fill' : 'bi-box-seam'} me-2`}></i> 
+                    {currentFulfillmentStatus}
+                  </span>
+                </div>
+
+                {/* Tracking Input Block */}
+                {!isFulfilled ? (
+                  <form onSubmit={handleFulfill}>
+                    <div className="mb-3">
+                      <label className="form-label small fw-bold text-muted">Tracking Number</label>
+                      <input type="text" className="form-control bg-body-tertiary shadow-none border" placeholder="e.g. 1Z99999999999" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} required />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label small fw-bold text-muted">Shipping Carrier</label>
+                      <select className="form-select bg-body-tertiary shadow-none border" value={carrier} onChange={(e) => setCarrier(e.target.value)}>
+                        <option value="USPS">USPS</option>
+                        <option value="FedEx">FedEx</option>
+                        <option value="UPS">UPS</option>
+                        <option value="DHL">DHL</option>
+                      </select>
+                    </div>
+                    <button type="submit" className="btn btn-primary w-100 fw-bold">Mark as Fulfilled</button>
+                  </form>
+                ) : (
+                  <div className="alert alert-success border-0 small mb-0">
+                    <div className="fw-bold mb-1">Tracking Added</div>
+                    <div>Carrier: {order.carrier || carrier}</div>
+                    <div>Tracking: {order.tracking_number || trackingNumber}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
           </div>
         </div>
       </div>
@@ -363,15 +504,13 @@ function App() {
   const [selectedSavedAddress, setSelectedSavedAddress] = useState(null);
   const [selectedSavedPayment, setSelectedSavedPayment] = useState(null);
   const [billingSame, setBillingSame] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  
 
   // Wishlist Storage Logic
   const getLikedKey = (email) => email ? `b2b_liked_${email}` : 'b2b_liked_guest';
   
-  const [likedItems, setLikedItems] = useState(() => {
-    const email = localStorage.getItem('userEmail');
-    const saved = localStorage.getItem(getLikedKey(email));
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [likedItems, setLikedItems] = useState([]);
   
   useEffect(() => {
     const email = localStorage.getItem('userEmail');
@@ -401,7 +540,7 @@ function App() {
   const heroSlides = [
     { id: 1, image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1600&q=80', text1: 'Simple', text2: 'is More' },
     { id: 2, image: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&w=1600&q=80', text1: 'Autumn', text2: 'Collection' },
-    { id: 3, image: 'https://images.unsplash.com/photo-1489987707023-afc8c3664d4b?auto=format&fit=crop&w=1600&q=80', text1: 'Essential', text2: 'Basics' },
+    { id: 3, image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=1600&q=80', text1: 'Essential', text2: 'Basics' },
   ];
 
   const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
@@ -423,6 +562,12 @@ function App() {
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  // --- Full Manual Address States ---
+  const [shipFlat, setShipFlat] = useState('');
+  const [shipStreet, setShipStreet] = useState('');
+  const [shipCity, setShipCity] = useState('');
+  const [shipState, setShipState] = useState('');
+  const [shipZip, setShipZip] = useState('');
 
   const [moqWarning, setMoqWarning] = useState('');
   
@@ -479,6 +624,20 @@ function App() {
   const [maxPrice, setMaxPrice] = useState(200);
   const [selectedCategories, setSelectedCategories] = useState([]);
 
+  // Admin Ledger States
+  const [selectedAdminOrder, setSelectedAdminOrder] = useState(null);
+
+  // Temporary function to simulate updating the tracking data in your UI
+  const handleUpdateFulfillment = (orderId, updateData) => {
+    // 1. Update the local order history so the UI changes instantly
+    setOrderHistory(prev => prev.map(order => order.id === orderId ? { ...order, ...updateData } : order));
+    // 2. Update the currently viewed modal so it changes to green instantly
+    setSelectedAdminOrder(prev => ({ ...prev, ...updateData }));
+    
+    showNotification("Order tracking updated successfully!");
+    // NOTE: You will eventually add a fetch('PUT') request here to update your FastAPI backend!
+  };
+
   const categoryOptions = ['T-Shirts', 'Hoodies', 'Outerwear', 'Bottoms', 'Other'];
   const sizeOptions = ['S', 'M', 'L', 'XL', 'XXL', '3XL'];
   const colorOptions = ['Black', 'White', 'Heather Gray', 'Navy', 'Red', 'Olive', 'Cream', 'Brown'];
@@ -504,19 +663,24 @@ function App() {
     }
   }, [isDarkMode]);
 
-  const toggleLike = (product) => {
+  const toggleLike = async (product) => {
     if (!userRole) {
       setIsSignUpMode(false); 
       setShowLoginModal(true);
       return;
     }
 
-    setLikedItems((prev) => {
-      if (prev.find((item) => item.id === product.id)) {
-        return prev.filter((item) => item.id !== product.id);
-      }
-      return [...prev, product];
-    });
+    const isLiked = likedItems.find((item) => item.id === product.id);
+
+    if (isLiked) {
+      // Remove from UI immediately, delete from DB in background
+      setLikedItems((prev) => prev.filter((item) => item.id !== product.id));
+      await supabase.from('user_wishlist').delete().match({ user_email: userEmail, product_id: product.id });
+    } else {
+      // Add to UI immediately, insert to DB in background
+      setLikedItems((prev) => [...prev, product]);
+      await supabase.from('user_wishlist').insert([{ user_email: userEmail, product_id: product.id, product_details: product }]);
+    }
   };
 
   const handleCartDecrement = (item) => {
@@ -552,11 +716,14 @@ function App() {
   // --- UPDATED: Fetch user data from DB on login ---
   useEffect(() => {
     const fetchUserData = async (email) => {
-      const { data: addresses } = await supabase.from('saved_addresses').select('*').eq('user_email', email);
-      const { data: payments } = await supabase.from('saved_payments').select('*').eq('user_email', email);
-      if (addresses) setSavedAddresses(addresses);
-      if (payments) setSavedPayments(payments);
-    };
+    const { data: addresses } = await supabase.from('saved_addresses').select('*').eq('user_email', email);
+    const { data: payments } = await supabase.from('saved_payments').select('*').eq('user_email', email);
+    const { data: wishlist } = await supabase.from('user_wishlist').select('*').eq('user_email', email); // NEW LINE
+    
+    if (addresses) setSavedAddresses(addresses);
+    if (payments) setSavedPayments(payments);
+    if (wishlist) setLikedItems(wishlist.map(item => item.product_details)); // NEW LINE
+  };
 
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -620,7 +787,18 @@ function App() {
       }
       
       const email = authResponse.data.user.email;
-      const role = email === 'admin@b2b.com' ? 'admin' : 'customer';
+      
+      // 1. Define all allowed admin emails here
+      const adminEmails = [
+        'admin@b2b.com', 
+        'newadmin@b2b.com', 
+        'emmanuel.dabandan@cvsu.edu.ph'
+      ];
+      
+      // 2. Check if the logged-in user's email is inside the admin list
+      const role = adminEmails.includes(email) ? 'admin' : 'customer';
+      
+      setUserRole(role);
       
       setUserRole(role); 
       setUserEmail(email);
@@ -647,10 +825,7 @@ function App() {
   };
 
   const handleLogout = async () => {
-    if (!window.confirm("Are you sure you want to sign out?")) {
-      return; 
-    }
-
+    // We removed the window.confirm check from here!
     await supabase.auth.signOut();
     setUserRole(null); 
     setUserEmail(null);
@@ -667,7 +842,9 @@ function App() {
     setSavedPayments([]);
 
     setIsUserMenuOpen(false); 
+    setShowLogoutConfirm(false); // Close the custom modal
     setCurrentView('store'); 
+    showNotification("You have been successfully signed out.");
   };
 
   const handleProfileUpdate = async (newName, newEmail) => {
@@ -694,12 +871,12 @@ function App() {
       }
       
       if (newEmail !== userEmail) {
-        setUserEmail(newEmail);
-        localStorage.setItem('userEmail', newEmail);
-        alert("Email update initiated! Please check your inbox for a verification link.");
-      } else {
-        alert("Profile details successfully updated!");
-      }
+  setUserEmail(newEmail);
+  localStorage.setItem('userEmail', newEmail);
+  showNotification("Email update initiated! Please check your inbox for a verification link.");
+} else {
+  showNotification("Profile details successfully updated!");
+}
     }
     
     // 4. Return to the main profile screen
@@ -735,15 +912,35 @@ function App() {
 
   const handleCheckout = async () => {
     const backendMappedMethod = paymentArrangement === 100 ? 'full' : 'down_payment';
-    // In handleCheckout(), update the payload object to this:
+
+    // --- 1. FORMAT THE FULL DELIVERY ADDRESS FIRST ---
+    let finalDeliveryAddress = 'Standard Billing Address';
+    
+    if (selectedSavedAddress) {
+      const savedAddr = savedAddresses.find(a => a.id === selectedSavedAddress);
+      finalDeliveryAddress = savedAddr ? `${savedAddr.address}, ${savedAddr.city}` : finalDeliveryAddress;
+    } else if (shipStreet || shipCity) {
+      // Safely filters out empty boxes
+      const addressParts = [shipFlat, shipStreet, shipCity, shipState, shipZip].filter(Boolean);
+      finalDeliveryAddress = addressParts.join(', ');
+    }
+
+    if (!finalDeliveryAddress || finalDeliveryAddress.trim() === '') {
+      finalDeliveryAddress = 'No Address Provided by Customer';
+    }
+
+    // --- 2. BUILD THE BACKEND PAYLOAD ---
     const payload = {
       items: cart,
       payment_method: backendMappedMethod,
       customer_email: userEmail,
-      customer_name: userName,                    // ← add this
-      payment_percentage: paymentArrangement,     // ← add this (sends 100/50/30/20)
-      shipping_method: shippingMethod,            // ← add this (sends 'standard'/'express'/'sameday')
+      customer_name: userName,
+      payment_percentage: paymentArrangement,
+      shipping_method: shippingMethod,
+      shipping_address: finalDeliveryAddress // <--- THIS WAS MISSING!
     };
+
+  
 
     
 
@@ -767,26 +964,51 @@ function App() {
           }
         }
 
-        let deliveryAddress = 'Standard Billing Address';
+        // --- GRAB THE CORRECT ADDRESS ---
+        // --- FORMAT THE FULL DELIVERY ADDRESS ---
+        // --- FORMAT THE FULL DELIVERY ADDRESS (BULLETPROOF) ---
+        let finalDeliveryAddress = 'Standard Billing Address';
+        
         if (selectedSavedAddress) {
           const savedAddr = savedAddresses.find(a => a.id === selectedSavedAddress);
-          deliveryAddress = savedAddr ? `${savedAddr.address}, ${savedAddr.city}` : deliveryAddress;
+          finalDeliveryAddress = savedAddr ? `${savedAddr.address}, ${savedAddr.city}` : finalDeliveryAddress;
+        } else if (shipStreet || shipCity) {
+          // This safely filters out empty boxes so you don't get weird commas like " , , "
+          const addressParts = [shipFlat, shipStreet, shipCity, shipState, shipZip].filter(Boolean);
+          finalDeliveryAddress = addressParts.join(', ');
         }
+
+        // Final safety net: If it's still completely blank, force a fallback message
+        if (!finalDeliveryAddress || finalDeliveryAddress.trim() === '') {
+          finalDeliveryAddress = 'No Address Provided by Customer';
+        }
+
+        // --- FORMAT THE PAYMENT METHOD ---
+        let formattedPayment = 'Credit / Debit Card';
+        if (selectedPaymentType === 'bank') formattedPayment = 'Direct Bank Transfer';
+        if (selectedPaymentType === 'delivery') formattedPayment = 'Pay on Delivery';
+        if (selectedPaymentType === 'other') formattedPayment = 'Other (PayPal, GPay, etc.)';
 
         const successData = {
           orderId: data.order_summary?.id || Math.floor(Math.random() * 90000) + 10000,
           email: userEmail || 'Guest User',
           shipping: shippingMethod,
-          paymentType: selectedPaymentType,
+          paymentType: formattedPayment, 
           cardLast4: last4,
-          address: deliveryAddress
+          deliveryAddress: finalDeliveryAddress // <--- Explicitly named deliveryAddress!
         };
 
         setSuccessOrderDetails(successData);
 
         // --- NEW: TRIGGER AUTOMATION WEBHOOK FOR EMAIL/INVOICE ---
+        // --- BUILD THE EXACT PAYLOAD FOR MAKE.COM ---
         const webhookPayload = {
-          ...successData,
+          orderId: data.order_summary?.id || Math.floor(Math.random() * 90000) + 10000,
+          email: userEmail || 'Guest User',
+          shipping: shippingMethod,
+          paymentType: formattedPayment, 
+          cardLast4: last4,
+          deliveryAddress: finalDeliveryAddress, // <-- Forced explicitly here!
           customerName: userName,
           items: cart,
           totalDue: finalTotalDue,
@@ -795,8 +1017,11 @@ function App() {
           isFullyPaid: paymentArrangement === 100
         };
 
-        // Fire and forget (doesn't hold up the UI)
-        fetch('https://hook.eu1.make.com/rkzx9r8youzm9t7gwwxkhxtr7i5iocma', {
+        // --- THE TRACKER: Prints the data to your browser console before sending ---
+        console.log("🚀 DEBUG - PAYLOAD GOING TO MAKE.COM:", webhookPayload);
+
+        // Fire to Make.com
+        fetch('https://hook.eu1.make.com/mslkh51d5bhj5w67yl5yyio5d81fwutr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(webhookPayload)
@@ -846,7 +1071,7 @@ function App() {
         setProducts([...products, addedProduct]);
         setNewProductName(''); setNewProductPrice(''); setNewProductImage(''); setNewProductDesc(''); setNewProductStock(''); setSelectedFormSizes([]); setSelectedFormColors([]);
         document.getElementById('imageUploadInput').value = ''; 
-        alert("Product added successfully!");
+        showNotification("Product added successfully!");
       }
     } catch (error) {
       console.error("Error adding product:", error);
@@ -860,9 +1085,9 @@ function App() {
         const updatedProduct = await response.json();
         setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
         setProductToEdit(null); 
-        alert("Changes saved successfully!");
+        showNotification("Changes saved successfully!");
       } else {
-        alert("Failed to save changes.");
+        showNotification("Failed to save changes.");
       }
     } catch (error) {
       console.error("Error saving edit:", error);
@@ -982,50 +1207,62 @@ function App() {
   });
 
   return (
-    <div className="bg-body-tertiary min-vh-100 pb-5">
+    <div className={`bg-body-tertiary min-vh-100 ${currentView.startsWith('admin_') ? 'overflow-hidden' : 'pb-5'}`}>
       <style>{globalStyles}</style>
       
-      {currentView !== 'checkout' && (
-        <nav className={`navbar navbar-expand-lg bg-body shadow-sm py-3 mb-0 sticky-top border-bottom ${(currentView === 'customer_orders' || currentView === 'wishlist') ? 'd-none d-md-flex' : ''}`}>
-          <div className="container-fluid px-4 d-flex justify-content-between align-items-center">
-            
-            <a className="navbar-brand fw-bold d-flex align-items-center gap-2 m-0 text-body" onClick={() => setCurrentView('store')} style={{cursor: 'pointer'}}>
-              <div className="bg-primary text-white rounded text-center" style={{width: '35px', height: '35px', lineHeight: '35px'}}>B</div>
-              B2B Apparel
-            </a>
+      {currentView !== 'checkout' && !currentView.startsWith('admin_') && (
+  <nav className={`navbar navbar-expand-lg bg-body shadow-sm py-3 mb-0 sticky-top border-bottom ${(currentView === 'customer_orders' || currentView === 'wishlist') ? 'd-none d-md-flex' : ''}`}>
+  <div className="container-fluid px-4 d-flex justify-content-between align-items-center">
+    
+    {/* --- CONDITIONAL LOGO --- */}
+    {!currentView.startsWith('admin_') ? (
+      <a className="navbar-brand fw-bold d-flex align-items-center gap-2 m-0 text-body" onClick={() => setCurrentView('store')} style={{cursor: 'pointer'}}>
+        <div className="bg-primary text-white rounded text-center" style={{width: '35px', height: '35px', lineHeight: '35px'}}>B</div>
+        BizBuy
+      </a>
+    ) : (
+      <div></div> /* Keeps the profile button pushed to the right */
+    )}
 
-            <div className="d-flex align-items-center gap-3">
-              <div className="d-flex align-items-center bg-body-tertiary rounded-pill border px-3 py-1 d-none d-md-flex" style={{maxWidth: '250px'}}>
-                <i className="bi bi-search text-muted"></i>
-                <input type="text" className="form-control bg-transparent border-0 shadow-none text-body ms-2 p-0 search-input" placeholder="Search products..." value={searchQuery} onChange={(e) => {setSearchQuery(e.target.value); setCurrentView('store');}}/>
-              </div>
-              
-              <button className="btn btn-outline-secondary border-0 position-relative rounded-circle d-none d-md-block" onClick={() => setCurrentView('wishlist')}>
-                <i className="bi bi-heart fs-5 text-body"></i>
-                {likedItems.length > 0 && <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{likedItems.length}</span>}
-              </button>
+    <div className="d-flex align-items-center gap-3">
+      
+      {/* --- CONDITIONAL STORE TOOLS (Hidden in Admin) --- */}
+      {!currentView.startsWith('admin_') && (
+        <>
+          <div className="d-flex align-items-center bg-body-tertiary rounded-pill border px-3 py-1 d-none d-md-flex" style={{maxWidth: '250px'}}>
+            <i className="bi bi-search text-muted"></i>
+            <input type="text" className="form-control bg-transparent border-0 shadow-none text-body ms-2 p-0 search-input" placeholder="Search products..." value={searchQuery} onChange={(e) => {setSearchQuery(e.target.value); setCurrentView('store');}}/>
+          </div>
+          
+          <button className="btn btn-outline-secondary border-0 position-relative rounded-circle d-none d-md-block" onClick={() => setCurrentView('wishlist')}>
+            <i className="bi bi-heart fs-5 text-body"></i>
+            {likedItems.length > 0 && <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{likedItems.length}</span>}
+          </button>
 
-              <button className="btn btn-outline-secondary border-0 position-relative rounded-circle" onClick={() => setIsCartOpen(true)}>
-                <i className="bi bi-cart3 fs-5 text-body"></i>
-                {totalQuantity > 0 && <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{totalQuantity}</span>}
-              </button>
+          <button className="btn btn-outline-secondary border-0 position-relative rounded-circle" onClick={() => setIsCartOpen(true)}>
+            <i className="bi bi-cart3 fs-5 text-body"></i>
+            {totalQuantity > 0 && <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{totalQuantity}</span>}
+          </button>
 
-              <button className="btn btn-outline-secondary border-0 position-relative rounded-circle d-none d-md-block" onClick={() => {
-                if (!userRole) {
-                  setIsSignUpMode(false);
-                  setShowLoginModal(true);
-                } else {
-                  fetchOrders();
-                  setCurrentView('customer_orders');
-                }
-              }}>
-                <i className="bi bi-bag fs-5 text-body"></i>
-              </button>
+          <button className="btn btn-outline-secondary border-0 position-relative rounded-circle d-none d-md-block" onClick={() => {
+            if (!userRole) {
+              setIsSignUpMode(false);
+              setShowLoginModal(true);
+            } else {
+              fetchOrders();
+              setCurrentView('customer_orders');
+            }
+          }}>
+            <i className="bi bi-bag fs-5 text-body"></i>
+          </button>
+        </>
+      )}
 
-              <div className="position-relative">
-                <button className={`btn rounded-circle ${userRole ? 'btn-primary' : 'btn-outline-secondary border-0'}`} onClick={() => userRole ? setIsUserMenuOpen(!isUserMenuOpen) : setShowLoginModal(true)}>
-                  <i className={`bi bi-person fs-5 ${userRole ? 'text-white' : 'text-body'}`}></i>
-                </button>
+      {/* --- PROFILE DROPDOWN (Always Visible) --- */}
+      <div className="position-relative">
+        <button className={`btn rounded-circle ${userRole ? 'btn-primary' : 'btn-outline-secondary border-0'}`} onClick={() => userRole ? setIsUserMenuOpen(!isUserMenuOpen) : setShowLoginModal(true)}>
+          <i className={`bi bi-person fs-5 ${userRole ? 'text-white' : 'text-body'}`}></i>
+        </button>
 
                 {isUserMenuOpen && userRole && (
                   <div className="position-absolute end-0 mt-3 bg-body rounded-4 shadow border overflow-hidden animate-dropdown" style={{width: '260px', zIndex: 1050}}>
@@ -1054,20 +1291,20 @@ function App() {
                       {userRole === 'admin' && (
                         <div className="mt-2 pt-2 border-top">
                           <small className="text-muted text-uppercase fw-bold ms-2" style={{fontSize: '10px'}}>Admin Tools</small>
-                          <button className={`btn btn-sm w-100 text-start fw-semibold mb-1 py-2 mt-1 ${currentView === 'catalog' ? 'bg-primary text-white' : 'btn-light text-body bg-transparent'}`} onClick={() => {setCurrentView('catalog'); setIsUserMenuOpen(false);}}>
-                            <i className="bi bi-box-seam me-2"></i> Manage Catalog
-                          </button>
-                          <button className={`btn btn-sm w-100 text-start fw-semibold mb-1 py-2 ${currentView === 'admin' ? 'bg-primary text-white' : 'btn-light text-body bg-transparent'}`} onClick={() => {fetchOrders(); setCurrentView('admin'); setIsUserMenuOpen(false);}}>
-                            <i className="bi bi-receipt me-2"></i> Admin Ledger
+                          <button 
+                            className={`btn btn-sm w-100 text-start fw-semibold mb-1 py-2 mt-1 ${currentView.startsWith('admin_') ? 'bg-primary text-white' : 'btn-light text-body bg-transparent'}`} 
+                            onClick={() => { fetchOrders(); setCurrentView('admin_dashboard'); setIsUserMenuOpen(false); }}
+                          >
+                            <i className="bi bi-shield-lock-fill me-2"></i> Admin Dashboard
                           </button>
                         </div>
                       )}
                     </div>
                     
                     <div className="border-top p-2 bg-body-tertiary">
-                       <button className="btn btn-outline-danger btn-sm w-100 fw-bold py-2" onClick={handleLogout}>
-                         <i className="bi bi-box-arrow-right me-2"></i> Sign Out
-                       </button>
+                       <button className="btn btn-outline-danger btn-sm w-100 fw-bold py-2" onClick={() => { setShowLogoutConfirm(true); setIsUserMenuOpen(false); }}>
+  <i className="bi bi-box-arrow-right me-2"></i> Sign Out
+</button>
                     </div>
                   </div>
                 )}
@@ -1222,12 +1459,15 @@ function App() {
                     <div className="bg-body p-4 rounded shadow-sm border-0 mb-5">
                       <h5 className="fw-bold text-body mb-4">Shipping Details</h5>
                       <div className="row g-3">
-                        <div className="col-12"><label className="form-label small fw-semibold text-muted mb-1">Flat/House no.</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" onFocus={() => setSelectedSavedAddress(null)} /></div>
-                        <div className="col-12"><label className="form-label small fw-semibold text-muted mb-1">Address</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" onFocus={() => setSelectedSavedAddress(null)} /></div>
-                        <div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">City</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" onFocus={() => setSelectedSavedAddress(null)} /></div>
-                        <div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">State</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" onFocus={() => setSelectedSavedAddress(null)} /></div>
-                        <div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">Postal Code</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" onFocus={() => setSelectedSavedAddress(null)} /></div>
-                        <div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">Famous Landmark</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" onFocus={() => setSelectedSavedAddress(null)} /></div>
+                       <div className="col-12"><label className="form-label small fw-semibold text-muted mb-1">Flat/House no.</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={shipFlat} onChange={(e) => setShipFlat(e.target.value)} onFocus={() => setSelectedSavedAddress(null)} /></div>
+
+<div className="col-12"><label className="form-label small fw-semibold text-muted mb-1">Address</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} onFocus={() => setSelectedSavedAddress(null)} /></div>
+
+<div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">City</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={shipCity} onChange={(e) => setShipCity(e.target.value)} onFocus={() => setSelectedSavedAddress(null)} /></div>
+
+<div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">State</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={shipState} onChange={(e) => setShipState(e.target.value)} onFocus={() => setSelectedSavedAddress(null)} /></div>
+
+<div className="col-md-6"><label className="form-label small fw-semibold text-muted mb-1">Postal Code</label><input type="text" className="form-control bg-body-tertiary border-0 shadow-none py-2 text-body" value={shipZip} onChange={(e) => setShipZip(e.target.value)} onFocus={() => setSelectedSavedAddress(null)} /></div>
                         <div className="col-12 mt-4">
                           <div className="form-check d-flex align-items-center">
                             <input className="form-check-input me-2 shadow-none" type="checkbox" id="billingSame" checked={billingSame} onChange={(e) => setBillingSame(e.target.checked)} style={{width: '18px', height: '18px'}} />
@@ -1524,7 +1764,7 @@ function App() {
                       filteredCustomerOrders.map(order => (
                         <div className="card border shadow-sm rounded-4 p-4 bg-body" key={order.id}>
                           <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
-                            <span className="fw-bold text-muted"><i className="bi bi-shop me-2"></i>B2B Apparel • Order #{order.id}</span>
+                            <span className="fw-bold text-muted"><i className="bi bi-shop me-2"></i>BizBuy • Order #{order.id}</span>
                             <span className={`badge ${order.balance_due > 0 ? 'bg-warning text-dark' : 'bg-success'}`}>{order.payment_status}</span>
                           </div>
                           
@@ -1769,8 +2009,164 @@ function App() {
               </div>
             )}
 
-            {currentView === 'catalog' && userRole === 'admin' && (
-               <div className="row">
+            {/* --- ADMIN LAYOUT W/ SIDEBAR --- */}
+{currentView.startsWith('admin_') && userRole === 'admin' && (
+  // Swapped the calc() math back to a clean vh-100
+  <div className="container-fluid p-0 vh-100 d-flex overflow-hidden bg-body">
+    
+    {/* Left Sidebar Navigation (Frozen) */}
+    <div className="bg-dark text-white d-flex flex-column h-100" style={{width: '260px', flexShrink: 0}}>
+      <div className="p-4 border-bottom border-secondary d-flex align-items-center gap-3">
+        <div className="bg-primary text-white rounded text-center fw-bold" style={{width: '35px', height: '35px', lineHeight: '35px'}}>B</div>
+        <h5 className="mb-0 fw-bold">Admin Panel</h5>
+      </div>
+      
+      {/* 2. Added overflow-y-auto here just in case you add more nav buttons later */}
+      <div className="p-3 d-flex flex-column gap-2 flex-grow-1 overflow-y-auto">
+        <button className={`btn text-start fw-semibold py-3 ${currentView === 'admin_dashboard' ? 'btn-primary' : 'btn-dark text-white-50'}`} onClick={() => setCurrentView('admin_dashboard')}>
+          <i className="bi bi-speedometer2 me-3"></i> Dashboard Overview
+        </button>
+        <button className={`btn text-start fw-semibold py-3 ${currentView === 'admin_catalog' ? 'btn-primary' : 'btn-dark text-white-50'}`} onClick={() => setCurrentView('admin_catalog')}>
+          <i className="bi bi-tags-fill me-3"></i> Manage Catalog
+        </button>
+        <button className={`btn text-start fw-semibold py-3 ${currentView === 'admin_ledger' ? 'btn-primary' : 'btn-dark text-white-50'}`} onClick={() => setCurrentView('admin_ledger')}>
+          <i className="bi bi-receipt me-3"></i> Internal Ledger
+        </button>
+      </div>
+
+      {/* 3. Added mt-auto to strictly anchor this to the bottom of the sidebar */}
+      <div className="p-3 border-top border-secondary mt-auto">
+        <button className="btn btn-outline-light w-100 fw-bold" onClick={() => setCurrentView('store')}>
+          <i className="bi bi-shop me-2"></i> Exit to Storefront
+        </button>
+      </div>
+    </div>
+
+    {/* Main Content Area (Scrollable) */}
+    {/* 4. Added h-100 here to ensure it respects the wrapper height */}
+    <div className="flex-grow-1 overflow-auto bg-body-tertiary p-4 p-md-5 h-100">
+      
+      {/* 1. DASHBOARD VIEW */}
+      {currentView === 'admin_dashboard' && (
+        <div className="animate-view">
+          <h3 className="fw-bold text-body mb-4">Analytics Overview</h3>
+          
+          {/* Top KPI Metric Cards */}
+          {(() => {
+            const totalOrdersCount = orderHistory.length;
+            const netSales = orderHistory.reduce((sum, order) => sum + (order.final_total || 0), 0);
+            const unitsSold = orderHistory.reduce((sum, order) => sum + (order.total_items || 0), 0);
+            const averageOrderValue = totalOrdersCount > 0 ? netSales / totalOrdersCount : 0;
+            
+            // Assuming an arbitrary 45% Cost of Goods Sold for margin calculations
+            const estimatedCOGS = netSales * 0.45; 
+            const grossMarginPercent = netSales > 0 ? ((netSales - estimatedCOGS) / netSales) * 100 : 0;
+
+            return (
+              <div className="row g-4 mb-4">
+                <div className="col-md-3">
+                  <div className="card border-0 shadow-sm rounded-4 p-4 h-100 bg-body">
+                    <div className="text-muted small fw-bold mb-2 text-uppercase tracking-wider">Net Sales</div>
+                    <h2 className="fw-bold text-primary mb-0">${netSales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h2>
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <div className="card border-0 shadow-sm rounded-4 p-4 h-100 bg-body">
+                    <div className="text-muted small fw-bold mb-2 text-uppercase tracking-wider">Total Orders</div>
+                    <h2 className="fw-bold text-body mb-0">{totalOrdersCount}</h2>
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <div className="card border-0 shadow-sm rounded-4 p-4 h-100 bg-body">
+                    <div className="text-muted small fw-bold mb-2 text-uppercase tracking-wider">Units Sold</div>
+                    <h2 className="fw-bold text-body mb-0">{unitsSold}</h2>
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <div className="card border-0 shadow-sm rounded-4 p-4 h-100 bg-body">
+                    <div className="text-muted small fw-bold mb-2 text-uppercase tracking-wider">Est. Gross Margin</div>
+                    <h2 className="fw-bold text-success mb-0">{grossMarginPercent.toFixed(1)}%</h2>
+                    <div className="small text-muted mt-1">AOV: ${averageOrderValue.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Line Chart Section */}
+          <div className="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-body">
+            <h5 className="fw-bold text-body mb-4">Performance Trends (Last 6 Months)</h5>
+            <div style={{ width: '100%', height: '350px' }}>
+              {/* Note: Mapped to mock monthly data. Update the data prop to dynamically group orderHistory by month when you have timestamps! */}
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={[
+                    { name: 'Jan', sales: 4000, orders: 24, units: 150 },
+                    { name: 'Feb', sales: 3000, orders: 18, units: 110 },
+                    { name: 'Mar', sales: 5200, orders: 35, units: 280 },
+                    { name: 'Apr', sales: 4800, orders: 29, units: 210 },
+                    { name: 'May', sales: 6100, orders: 42, units: 350 },
+                    { name: 'Jun', sales: 7400, orders: 55, units: 420 },
+                  ]}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--bs-border-color)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--bs-secondary-color)'}} dy={10} />
+                  <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: 'var(--bs-secondary-color)'}} tickFormatter={(value) => `$${value}`} />
+                  <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: 'var(--bs-secondary-color)'}} />
+                  <Tooltip contentStyle={{backgroundColor: 'var(--bs-body-bg)', borderColor: 'var(--bs-border-color)', borderRadius: '8px', color: 'var(--bs-body-color)'}} />
+                  <Legend wrapperStyle={{paddingTop: '20px'}} />
+                  <Line yAxisId="left" type="monotone" dataKey="sales" name="Net Sales ($)" stroke="#274c77" strokeWidth={3} activeDot={{ r: 8 }} />
+                  <Line yAxisId="right" type="monotone" dataKey="orders" name="Total Orders" stroke="#2a9d8f" strokeWidth={3} />
+                  <Line yAxisId="right" type="monotone" dataKey="units" name="Units Sold" stroke="#e76f51" strokeWidth={3} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Quick Order Status Table */}
+          <div className="card border-0 shadow-sm rounded-4 overflow-hidden bg-body">
+            <div className="card-header bg-body border-bottom p-4 d-flex justify-content-between align-items-center">
+              <h5 className="fw-bold mb-0">Recent Order Activity</h5>
+              <button className="btn btn-sm btn-outline-primary fw-bold" onClick={() => setCurrentView('admin_ledger')}>View All</button>
+            </div>
+            <div className="card-body p-0">
+              <table className="table table-hover mb-0 align-middle text-body">
+                <thead className="table-light text-muted small text-uppercase">
+                  <tr>
+                    <th className="ps-4">Order ID</th>
+                    <th>Customer</th>
+                    <th>Fulfillment Status</th>
+                    <th>Payment Status</th>
+                    <th className="text-end pe-4">Total Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderHistory.slice(0, 5).map(order => (
+                    <tr key={order.id}>
+                      <td className="ps-4 fw-bold">#{order.id}</td>
+                      <td>{order.customer_email || 'Guest User'}</td>
+                      <td>
+                        <span className={`badge ${order.status === 'Shipped' ? 'bg-success' : 'bg-secondary'}`}>
+                          {order.status || 'Processing'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${order.balance_due > 0 ? 'bg-warning text-dark' : 'bg-success'}`}>
+                          {order.payment_status}
+                        </span>
+                      </td>
+                      <td className="text-end pe-4 fw-semibold">${(order.final_total || 0).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  {orderHistory.length === 0 && <tr><td colSpan="5" className="text-center text-muted p-4">No recent orders.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MANAGE CATALOG VIEW (Your existing code wrapped) */}
+      {currentView === 'admin_catalog' && (
+         <div className="row">
                  <div className="col-md-12 mb-4 mt-4">
                    <button className="btn btn-link text-body text-decoration-none px-0 mb-3 fw-semibold" onClick={() => setCurrentView('store')}>
                      <i className="bi bi-arrow-left me-2"></i> Back to Store
@@ -1839,6 +2235,103 @@ function App() {
                  </div>
                </div>
             )}
+
+      {/* 3. INTERNAL LEDGER VIEW */}
+      {currentView === 'admin_ledger' && (
+         <div className="animate-view h-100 d-flex flex-column">
+           <h3 className="fw-bold text-body mb-4">Internal Financial Ledger</h3>
+           
+           <div className="card shadow-sm border-0 rounded-4 overflow-hidden bg-body flex-grow-1 d-flex flex-column">
+             <div className="card-header bg-dark text-white fw-bold py-3">
+               Order Database
+             </div>
+             
+             {/* SCROLLABLE TABLE CONTAINER */}
+             <div className="card-body p-0 overflow-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+               <table className="table table-hover mb-0 align-middle text-body" style={{ minWidth: '1300px' }}>
+                 
+                 {/* STICKY HEADER */}
+                 <thead className={`${isDarkMode ? 'card-header bg-dark text-white' : 'table-light text-body'} sticky-top`} style={{ zIndex: 1 }}>
+  <tr>
+    <th className="ps-4 py-3">Order ID</th>
+    <th className="py-3">Customer</th>
+    <th className="py-3">Fulfillment</th>
+    <th className="py-3" style={{minWidth: '250px'}}>Order Breakdown (Line Items)</th>
+    <th className="py-3">Total Items</th>
+    <th className="py-3">Total Value</th>
+    <th className="py-3">Amount Paid</th>
+    <th className="py-3">Balance Due</th>
+    <th className="pe-4 py-3">Payment Status</th>
+  </tr>
+</thead>
+                 
+                 <tbody>
+                   {orderHistory.map((order) => {
+                     // Safety checks
+                     const currentFulfillmentStatus = order.fulfillment_status || (order.status === 'Shipped' ? 'Fulfilled' : 'Unfulfilled');
+                     
+                     return (
+                       <tr 
+                         key={order.id} 
+                         onClick={() => setSelectedAdminOrder(order)} 
+                         style={{cursor: 'pointer'}} 
+                         className="position-relative"
+                       >
+                         <td className="ps-4 fw-bold text-muted">#{order.id}</td>
+                         
+                         <td><span className="badge bg-body-tertiary text-body border">{order.customer_email || 'Guest'}</span></td>
+                         
+                         {/* NEW FULFILLMENT COLUMN */}
+                         <td>
+                           <span className={`badge ${currentFulfillmentStatus === 'Fulfilled' ? 'bg-success' : currentFulfillmentStatus === 'Partially Fulfilled' ? 'bg-warning text-dark' : 'bg-secondary'}`}>
+                             {currentFulfillmentStatus}
+                           </span>
+                         </td>
+
+                         <td>
+                           <ul className="list-unstyled mb-0 small text-body">
+                             {order.items && order.items.map((item, idx) => (
+                               <li key={idx} className="mb-1 border-bottom pb-1 border-light">
+                                 <span className="fw-bold text-body">{item.quantity}x</span> {item.name} 
+                                 <span className="text-muted ms-1">(${item.price?.toFixed(2)} ea)</span>
+                               </li>
+                             ))}
+                           </ul>
+                         </td>
+                         
+                         <td className="text-body">{order.total_items}</td>
+                         <td className="fw-semibold text-body">${(order.final_total || 0).toFixed(2)}</td>
+                         <td className="text-body">${(order.amount_paid || 0).toFixed(2)}</td>
+                         
+                         <td className={order.balance_due > 0 ? "text-danger fw-bold" : "text-success fw-bold"}>
+                           ${(order.balance_due || 0).toFixed(2)}
+                         </td>
+                         
+                         <td className="pe-4">
+                           <span className={`badge ${order.balance_due > 0 ? 'bg-warning text-dark' : 'bg-success'}`}>
+                             {order.payment_status}
+                           </span>
+                         </td>
+                       </tr>
+                     );
+                   })}
+                 </tbody>
+               </table>
+               
+               {orderHistory.length === 0 && (
+                 <div className="text-center p-5 text-muted bg-body">
+                   <i className="bi bi-receipt fs-1 d-block mb-3"></i>
+                   No purchase orders have been processed yet.
+                 </div>
+               )}
+             </div>
+           </div>
+         </div>
+      )}
+
+    </div>
+  </div>
+)}
 
             {currentView === 'admin' && userRole === 'admin' && (
                <div className="card shadow-sm border-0 rounded-4 overflow-hidden bg-body border mt-4">
@@ -2040,6 +2533,27 @@ function App() {
           </div>
         </>
       )}
+      {/* --- CUSTOM LOGOUT CONFIRMATION MODAL --- */}
+      {showLogoutConfirm && (
+        <>
+          <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark opacity-50" style={{ zIndex: 1060 }} onClick={() => setShowLogoutConfirm(false)}></div>
+          <div className="position-fixed top-50 start-50 translate-middle animate-dropdown" style={{ zIndex: 1070, width: '100%', maxWidth: '350px' }}>
+            <div className="card border-0 shadow-lg rounded-4 overflow-hidden bg-body">
+              <div className="card-body p-4 text-center">
+                <div className="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: '60px', height: '60px' }}>
+                  <i className="bi bi-box-arrow-right fs-2"></i>
+                </div>
+                <h5 className="fw-bold text-body mb-2">Sign Out</h5>
+                <p className="text-muted small mb-4">Are you sure you want to sign out of your account?</p>
+                <div className="d-flex gap-2 justify-content-center">
+                  <button className="btn btn-outline-secondary fw-semibold flex-grow-1 rounded-pill shadow-none" onClick={() => setShowLogoutConfirm(false)}>Cancel</button>
+                  <button className="btn btn-danger fw-semibold flex-grow-1 rounded-pill shadow-none" onClick={handleLogout}>Sign Out</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {productToEdit && <EditProductModal product={productToEdit} categoryOptions={categoryOptions} sizeOptions={sizeOptions} colorOptions={colorOptions} onClose={() => setProductToEdit(null)} onSave={handleSaveEdit} />}
       
@@ -2052,6 +2566,15 @@ function App() {
             setIsSignUpMode(false); 
             setShowLoginModal(true);
           }} 
+        />
+      )}
+
+      {selectedAdminOrder && (
+        <AdminOrderModal 
+          order={selectedAdminOrder} 
+          onClose={() => setSelectedAdminOrder(null)} 
+          onUpdateFulfillment={handleUpdateFulfillment}
+          showNotification={showNotification}
         />
       )}
 
