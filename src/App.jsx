@@ -39,7 +39,7 @@ const globalStyles = `
     --b2b-input-bg: #f8f9fa;
     --b2b-border: #dee2e6;
   }
-
+  
   [data-bs-theme='dark'] {
     /* Lighten primary slightly so links/borders are legible in the dark */
     --bs-primary: #4a80bc; 
@@ -57,6 +57,27 @@ const globalStyles = `
     --b2b-card-bg: #162b44;
     --b2b-input-bg: #1a3454;
     --b2b-border: #2a3f5a;
+  }
+
+  /* --- NEW: Mobile Horizontal Scroll (App-like UX) --- */
+  .mobile-scroll-row {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .mobile-scroll-row > div {
+    scroll-snap-align: start;
+  }
+  
+  /* Hide the scrollbar on mobile so it looks like a native app slider */
+  @media (max-width: 767px) {
+    .mobile-scroll-row::-webkit-scrollbar {
+      display: none; 
+    }
+    .mobile-scroll-row {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
   }
 
   /* Force exact backgrounds and text colors overriding Bootstrap's stubborn utility classes */
@@ -276,19 +297,16 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
-  // Update these to handle empty states safely
+  
   const increment = () => setQuantity((prev) => (prev === '' ? 1 : prev + 1));
   const decrement = () => setQuantity((prev) => (prev > 1 ? prev - 1 : 1));
 
-  // Add these two new functions to control the typing
   const handleQuantityChange = (e) => {
-    // Strip out letters or symbols, only allow numbers
     const val = e.target.value.replace(/[^0-9]/g, '');
     setQuantity(val === '' ? '' : parseInt(val, 10));
   };
 
   const handleQuantityBlur = () => {
-    // If the user deletes the number and clicks away, reset to 1
     if (quantity === '' || quantity < 1) {
       setQuantity(1);
     }
@@ -299,8 +317,8 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
 
   const safeStock = product.stock > 0 ? product.stock : 100;
   const needsSize = sizes.length > 0;
-  const needsColor = colors.length > 0;
-  
+  // Logic to show color section
+  const needsColor = (colors.length > 0) || (product.category === 'T-Shirts' || product.category === 'Hoodies');
   
   const isReadyToAdd = (!needsSize || selectedSize) && (!needsColor || selectedColor);
 
@@ -330,36 +348,65 @@ function ProductModal({ product, onClose, userRole, onRequestLogin }) {
     <>
       <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark opacity-50" style={{ zIndex: 1040 }} onClick={onClose}></div>
       <div className="position-fixed top-50 start-50 translate-middle w-100 px-3 animate-dropdown" style={{ zIndex: 1050, maxWidth: '800px' }}>
-        <div className="card shadow-lg rounded-4 overflow-hidden border-0 bg-body">
+        <div className="card shadow-lg rounded-4 overflow-hidden border-0 bg-body" onClick={(e) => e.stopPropagation()}>
           <div className="row g-0">
             <div className="col-md-5 bg-body-tertiary d-flex align-items-center justify-content-center" style={{ minHeight: '300px' }}>
               {product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="img-fluid h-100 w-100" style={{ objectFit: 'cover' }} /> : <i className="bi bi-image text-muted" style={{ fontSize: '5rem' }}></i>}
             </div>
             <div className="col-md-7 position-relative">
               <button className="btn-close position-absolute top-0 end-0 m-3" onClick={onClose}></button>
-              <div className="card-body p-4 d-flex flex-column h-100">
-                <small className="text-muted text-uppercase fw-bold mb-1">{product.category}</small>
-                <h3 className="fw-bold mb-2">{product.name}</h3>
-                <h4 className="text-primary fw-bold mb-3">${product.basePrice.toFixed(2)}</h4>
-                <p className="text-muted small mb-4">{product.description || "No description provided for this item."}</p>
-                <div className="row mb-4">
-                  <div className="col-12 mb-3"><span className="d-block fw-bold small mb-2">Select Size {needsSize && !selectedSize && <span className="text-danger">*</span>}</span><div className="d-flex flex-wrap gap-2">{sizes.map(size => (<button key={size} className={`btn btn-sm ${selectedSize === size ? 'btn-primary' : 'btn-outline-secondary'} fw-bold`} onClick={() => setSelectedSize(size)}>{size}</button>))}</div></div>
-                  {needsColor && (<div className="col-12"><span className="d-block fw-bold small mb-2">Select Color {!selectedColor && <span className="text-danger">*</span>}</span><div className="d-flex flex-wrap gap-2">{colors.map(color => (<button key={color} className={`btn btn-sm ${selectedColor === color ? 'btn-primary' : 'btn-outline-secondary'} fw-bold`} onClick={() => setSelectedColor(color)}>{color}</button>))}</div></div>)}
+              <div className="card-body p-3 d-flex flex-column h-100" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                <small className="text-muted text-uppercase fw-bold mb-1" style={{ fontSize: '0.7rem' }}>{product.category}</small>
+                <h3 className="fw-bold mb-1 fs-4">{product.name}</h3>
+                <h4 className="text-primary fw-bold mb-2 fs-5">${product.basePrice.toFixed(2)}</h4>
+                <p className="text-muted small mb-3" style={{ fontSize: '0.85rem' }}>{product.description || "No description provided."}</p>
+                
+                {/* Size Selection */}
+                <div className="row mb-3">
+                  <div className="col-12 mb-2">
+                    <span className="d-block fw-bold small mb-1">Select Size {needsSize && !selectedSize && <span className="text-danger">*</span>}</span>
+                    <div className="d-flex flex-wrap gap-1">
+                      {sizes.map(size => (
+                        <button key={size} className={`btn btn-sm px-2 ${selectedSize === size ? 'btn-primary' : 'btn-outline-secondary'} fw-bold`} style={{ fontSize: '0.75rem' }} onClick={() => setSelectedSize(size)}>{size}</button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+
+                {/* Color Selection (Applied Here) */}
+                {needsColor && (
+                  <div className="col-12 mb-3">
+                    <span className="d-block fw-bold small mb-1">Select Color {needsColor && !selectedColor && <span className="text-danger">*</span>}</span>
+                    <div className="d-flex flex-wrap gap-2" style={{ minHeight: '35px' }}>
+                      {colors.length > 0 ? colors.map(color => (
+                        <button 
+                          key={color} 
+                          className={`btn btn-sm px-2 ${selectedColor === color ? 'btn-primary' : 'btn-outline-secondary'} fw-bold`} 
+                          style={{ fontSize: '0.75rem' }} 
+                          onClick={() => setSelectedColor(color)}
+                        >
+                          {color}
+                        </button>
+                      )) : <span className="text-muted small">No colors available</span>}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-auto border-top pt-3">
                   <div className="d-flex justify-content-between align-items-center mb-3"><span className="fw-bold small text-muted">Stock Available: <span className="text-success">{safeStock}</span></span></div>
                   <div className="d-flex gap-3">
-<div className="input-group" style={{ width: '130px' }}>
-  <button className="btn btn-outline-secondary fw-bold" type="button" onClick={decrement}>-</button>
-  <input 
-    type="text" 
-    className="form-control text-center fw-bold shadow-none" 
-    value={quantity} 
-    onChange={handleQuantityChange}
-    onBlur={handleQuantityBlur}
-  />
-  <button className="btn btn-outline-secondary fw-bold" type="button" onClick={increment}>+</button>
-</div>                    <button className={`btn ${canClick ? 'btn-primary' : 'btn-secondary'} fw-bold flex-grow-1 rounded-pill`} onClick={handleAdd} disabled={!canClick}>{buttonText}</button>
+                    <div className="input-group" style={{ width: '130px' }}>
+                      <button className="btn btn-outline-secondary fw-bold" type="button" onClick={decrement}>-</button>
+                      <input 
+                        type="text" 
+                        className="form-control text-center fw-bold shadow-none" 
+                        value={quantity} 
+                        onChange={handleQuantityChange}
+                        onBlur={handleQuantityBlur}
+                      />
+                      <button className="btn btn-outline-secondary fw-bold" type="button" onClick={increment}>+</button>
+                    </div>
+                    <button className={`btn ${canClick ? 'btn-primary' : 'btn-secondary'} fw-bold flex-grow-1 rounded-pill`} onClick={handleAdd} disabled={!canClick}>{buttonText}</button>
                   </div>
                 </div>
               </div>
@@ -1580,8 +1627,8 @@ function App() {
                 <div key={slide.id} className="w-100 flex-shrink-0 position-relative d-flex align-items-center" style={{ minHeight: '400px', backgroundImage: `url(${slide.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
                   <div className="position-absolute top-0 start-0 w-100 h-100 bg-dark opacity-50"></div>
                   <div className="position-relative" style={{ paddingLeft: '8%', zIndex: 2 }}>
-                    <h1 className="text-white mb-0" style={{ fontSize: '6rem', fontWeight: 300, letterSpacing: '-2px', lineHeight: '1.1' }}>{slide.text1}</h1>
-                    <h1 className="text-white mb-0" style={{ fontSize: '6rem', fontWeight: 300, letterSpacing: '-2px', lineHeight: '1.1', marginLeft: '4rem' }}>{slide.text2}</h1>
+                    <h1 className="text-white mb-0" style={{ fontSize: 'clamp(3rem, 10vw, 6rem)', fontWeight: 300, letterSpacing: '-2px', lineHeight: '1.1' }}>{slide.text1}</h1>
+<h1 className="text-white mb-0" style={{ fontSize: 'clamp(3rem, 10vw, 6rem)', fontWeight: 300, letterSpacing: '-2px', lineHeight: '1.1', marginLeft: 'clamp(1rem, 5vw, 4rem)' }}>{slide.text2}</h1>
                   </div>
                 </div>
               ))}
@@ -1599,13 +1646,11 @@ function App() {
         )}
 
         {currentView === 'checkout' && (
-          <div className="container-fluid vh-100 p-0 bg-body overflow-hidden">
-            <div className="row g-0 h-100">
-              
-              <div className="col-md-5 bg-body border-end p-4 p-md-5 h-100 overflow-y-auto checkout-scroll">
-                <button className="btn btn-link text-primary text-decoration-none px-0 mb-5 fw-semibold" onClick={() => { setCurrentView('store'); setCheckoutPhase('shipping'); }}>
-                  <i className="bi bi-arrow-left fs-4"></i> 
-                </button>
+  <div className="container-fluid min-vh-100 vh-md-100 p-0 bg-body overflow-md-hidden">
+    <div className="row g-0 h-100 flex-column flex-md-row">
+      
+      <div className="col-md-5 bg-body border-end p-4 p-md-5 h-md-100 overflow-y-auto checkout-scroll order-2 order-md-1">
+                
                 <h4 className="fw-bold mb-4 text-body">Order Summary</h4>
                 
                 <div className="mb-4">
@@ -1633,7 +1678,7 @@ function App() {
                 </div>
 
                 <div className="mb-4 pt-3 border-top">
-                  <label className="form-label small fw-bold text-muted mb-2">Gift Card / Discount code</label>
+                  <label className="form-label small fw-bold text-muted mb-2">Discount code</label>
                   <div className="d-flex gap-2">
                     <input type="text" className="form-control bg-body-tertiary border-0 shadow-none text-body" placeholder="" />
                     <button className="btn btn-outline-primary px-4 fw-semibold">Apply</button>
@@ -1696,7 +1741,9 @@ function App() {
                         <div className="text-center text-muted small my-3 fw-bold">OR ENTER A NEW ADDRESS</div>
                       </div>
                     )}
-
+                    <button className="btn btn-link text-primary text-decoration-none px-0 mb-5 fw-semibold" onClick={() => { setCurrentView('store'); setCheckoutPhase('shipping'); }}>
+                  <i className="bi bi-arrow-left fs-4"></i> 
+                </button>
                     <div className="bg-body p-4 rounded shadow-sm border-0 mb-4">
                       <h5 className="fw-bold text-body mb-4">Contact Details</h5>
                       <div className="row g-3">
@@ -1751,6 +1798,9 @@ function App() {
 
                 {checkoutPhase === 'delivery' && (
                   <div className="animate-view">
+                    <button className="btn btn-link text-primary text-decoration-none px-0 mb-5 fw-semibold" onClick={() => { setCurrentView('store'); setCheckoutPhase('shipping'); }}>
+                  <i className="bi bi-arrow-left fs-4"></i> 
+                </button>
                     <div className="bg-body p-4 rounded shadow-sm border-0 mb-5">
                       <h5 className="fw-bold text-body mb-4">Delivery Options</h5>
                       <div className="list-group list-group-flush">
@@ -1788,6 +1838,9 @@ function App() {
                   <div className="animate-view">
                     
                     {/* --- PAYMENT METHODS AT THE TOP --- */}
+                    <button className="btn btn-link text-primary text-decoration-none px-0 mb-5 fw-semibold" onClick={() => { setCurrentView('store'); setCheckoutPhase('shipping'); }}>
+                  <i className="bi bi-arrow-left fs-4"></i> 
+                </button>
                     <div className="bg-body p-4 rounded shadow-sm border-0 mb-4">
                       <h5 className="fw-bold text-body mb-4">Payment Methods</h5>
                       
@@ -1973,22 +2026,18 @@ function App() {
                       </select>
                     </div>
                   </div>
-                  <div className="row">
-                    {displayProducts.map((product) => (
-                      <ProductCard 
-                        key={product.id} 
-                        product={product} 
-                        viewMode={viewMode} 
-                        
-                        /* --- FIX: Wrap these two in arrow functions --- */
-                        onViewDetails={() => setSelectedProduct(product)} 
-                        onToggleLike={() => toggleLike(product)}
-                        /* ---------------------------------------------- */
-                        
-                        isLiked={!!likedItems.find(i => i.id === product.id)}
-                      />
-                    ))}
-                  </div>
+                  <div className={`row ${viewMode === 'grid' ? 'flex-nowrap flex-md-wrap overflow-auto mobile-scroll-row' : ''} pb-4`}>
+  {displayProducts.map((product) => (
+    <ProductCard 
+      key={product.id} 
+      product={product} 
+      viewMode={viewMode} 
+      onViewDetails={() => setSelectedProduct(product)} 
+      onToggleLike={() => toggleLike(product)}
+      isLiked={!!likedItems.find(i => i.id === product.id)}
+    />
+  ))}
+</div>
                 </div>
               </div>
             )}
@@ -2288,7 +2337,8 @@ function App() {
   <div className="container-fluid p-0 vh-100 d-flex overflow-hidden bg-body">
     
     {/* Left Sidebar Navigation (Frozen) */}
-    <div className="bg-dark text-white d-flex flex-column h-100" style={{width: '260px', flexShrink: 0}}>
+    {/* Left Sidebar Navigation (Frozen on Desktop, Hidden on Mobile) */}
+<div className="bg-dark text-white d-none d-md-flex flex-column h-100" style={{width: '260px', flexShrink: 0}}>
       <div className="p-4 border-bottom border-secondary d-flex align-items-center gap-3">
         <div className="bg-primary text-white rounded text-center fw-bold" style={{width: '35px', height: '35px', lineHeight: '35px'}}>B</div>
         <h5 className="mb-0 fw-bold">Admin Panel</h5>
@@ -2303,7 +2353,7 @@ function App() {
           <i className="bi bi-tags-fill me-3"></i> Manage Catalog
         </button>
         <button className={`btn text-start fw-semibold py-3 ${currentView === 'admin_ledger' ? 'btn-primary' : 'btn-dark text-white-50'}`} onClick={() => setCurrentView('admin_ledger')}>
-          <i className="bi bi-receipt me-3"></i> Internal Ledger
+          <i className="bi bi-receipt me-3"></i> Orders
         </button>
       </div>
 
@@ -2315,6 +2365,25 @@ function App() {
       </div>
     </div>
 
+    {/* --- ADMIN BOTTOM MOBILE NAVIGATION BAR --- */}
+<div className="position-fixed bottom-0 start-0 w-100 bg-dark shadow-lg border-top border-secondary d-flex justify-content-around align-items-center py-2 d-md-none" style={{zIndex: 1030}}>
+  <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'admin_dashboard' ? 'text-primary' : 'text-white-50'}`} onClick={() => setCurrentView('admin_dashboard')}>
+    <i className={`bi bi-speedometer2 fs-5 mb-1`}></i>
+    <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Dashboard</span>
+  </button>
+  <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'admin_catalog' ? 'text-primary' : 'text-white-50'}`} onClick={() => setCurrentView('admin_catalog')}>
+    <i className={`bi bi-tags-fill fs-5 mb-1`}></i>
+    <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Catalog</span>
+  </button>
+  <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'admin_ledger' ? 'text-primary' : 'text-white-50'}`} onClick={() => setCurrentView('admin_ledger')}>
+    <i className={`bi bi-receipt fs-5 mb-1`}></i>
+    <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Ledger</span>
+  </button>
+  <button className={`btn border-0 d-flex flex-column align-items-center p-1 text-danger`} onClick={() => setCurrentView('store')}>
+    <i className={`bi bi-box-arrow-left fs-5 mb-1`}></i>
+    <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Exit</span>
+  </button>
+</div>
     {/* Main Content Area (Scrollable) */}
     {/* 4. Added h-100 here to ensure it respects the wrapper height */}
     <div className="flex-grow-1 overflow-auto bg-body-tertiary p-4 p-md-5 h-100">
@@ -2400,8 +2469,8 @@ function App() {
               <h5 className="fw-bold mb-0">Recent Order Activity</h5>
               <button className="btn btn-sm btn-outline-primary fw-bold" onClick={() => setCurrentView('admin_ledger')}>View All</button>
             </div>
-            <div className="card-body p-0">
-              <table className="table table-hover mb-0 align-middle text-body">
+            <div className="card-body p-0 overflow-auto">
+  <table className="table table-hover mb-0 align-middle text-body" style={{ minWidth: '800px' }}>
                 <thead className="table-light text-muted small text-uppercase">
                   <tr>
                     <th className="ps-4">Order ID</th>
@@ -2675,7 +2744,7 @@ function App() {
       </div>
 
       {/* --- BOTTOM MOBILE NAVIGATION BAR --- */}
-      {currentView !== 'checkout' && (
+      {currentView !== 'checkout' && !currentView.startsWith('admin_') && (
         <div className="position-fixed bottom-0 start-0 w-100 bg-body shadow-lg border-top d-flex justify-content-around align-items-center py-2 d-md-none" style={{zIndex: 1030}}>
           <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'store' ? 'text-primary' : 'text-muted'}`} onClick={() => setCurrentView('store')}>
             <i className={`bi ${currentView === 'store' ? 'bi-house-fill' : 'bi-house'} fs-5 mb-1`}></i>
@@ -2872,7 +2941,7 @@ function App() {
       {/* --- CSS Slide Out Cart --- */}
       <>
         <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark" style={{ zIndex: 1040, opacity: isCartOpen ? 0.5 : 0, visibility: isCartOpen ? 'visible' : 'hidden', transition: 'opacity 0.3s ease, visibility 0.3s ease' }} onClick={() => setIsCartOpen(false)}></div>
-        <div className="position-fixed top-0 end-0 h-100 bg-body shadow-lg d-flex flex-column" style={{ width: '400px', zIndex: 1050, transform: isCartOpen ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+        <div className="position-fixed top-0 end-0 h-100 bg-body shadow-lg d-flex flex-column" style={{ width: '400px', maxWidth: '100%', zIndex: 1050, transform: isCartOpen ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
           
           <div className="d-flex justify-content-between align-items-center p-4 border-bottom">
             <h5 className="mb-0 fw-bold text-body">Your Order</h5>
