@@ -1212,8 +1212,7 @@ function App() {
   const handleCheckout = async () => {
     const backendMappedMethod = paymentArrangement === 100 ? 'full' : 'down_payment';
 
-    // --- 1. FORMAT THE FULL DELIVERY ADDRESS FIRST ---
-    // --- 1. FORMAT THE FULL DELIVERY ADDRESS FIRST ---
+    // ... (Your address and payload formatting code remains exactly the same) ...
     let finalDeliveryAddress = 'Standard Billing Address';
     if (selectedSavedAddress) {
       const savedAddr = savedAddresses.find(a => a.id === selectedSavedAddress);
@@ -1226,26 +1225,20 @@ function App() {
       finalDeliveryAddress = 'No Address Provided by Customer';
     }
 
-    // --- 2. FORMAT THE CUSTOMER NAME ---
     const finalCustomerName = checkoutFirstName || checkoutLastName 
       ? `${checkoutFirstName} ${checkoutLastName}`.trim() 
       : (userName || 'Guest User');
 
-    // --- 3. BUILD THE BACKEND PAYLOAD ---
     const payload = {
       items: cart,
       payment_method: backendMappedMethod,
       customer_email: userEmail,
-      customer_name: finalCustomerName,       // <--- Now uses typed name
-      customer_phone: checkoutPhone,          // <--- Now sends phone number
+      customer_name: finalCustomerName,
+      customer_phone: checkoutPhone,
       payment_percentage: paymentArrangement,
       shipping_method: shippingMethod,
-      shipping_address: finalDeliveryAddress  // <--- Now sends full address
+      shipping_address: finalDeliveryAddress
     };
-
-  
-
-    
 
     try {
       const response = await fetch('https://b2b-apparel-backend.onrender.com/api/checkout', {
@@ -1256,6 +1249,26 @@ function App() {
       const data = await response.json();
 
       if (response.ok) {
+        // --- NEW: INVENTORY UPDATE LOGIC ---
+        // We iterate through the cart to decrement stock for each item
+        for (const item of cart) {
+          try {
+            await fetch(`https://b2b-apparel-backend.onrender.com/api/products/${item.id}/decrement`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ quantity: item.quantity })
+            });
+          } catch (err) {
+            console.error(`Failed to decrement stock for ${item.name}:`, err);
+          }
+        }
+
+        // Refresh product list so UI shows new stock levels
+        const refreshResponse = await fetch('https://b2b-apparel-backend.onrender.com/api/products');
+        const refreshedProducts = await refreshResponse.json();
+        setProducts(refreshedProducts);
+        // ------------------------------------
+
         // --- CAPTURE DATA FOR SUCCESS SCREEN ---
         let last4 = '';
         if (selectedPaymentType === 'credit') {
@@ -1267,26 +1280,6 @@ function App() {
           }
         }
 
-        // --- GRAB THE CORRECT ADDRESS ---
-        // --- FORMAT THE FULL DELIVERY ADDRESS ---
-        // --- FORMAT THE FULL DELIVERY ADDRESS (BULLETPROOF) ---
-        let finalDeliveryAddress = 'Standard Billing Address';
-        
-        if (selectedSavedAddress) {
-          const savedAddr = savedAddresses.find(a => a.id === selectedSavedAddress);
-          finalDeliveryAddress = savedAddr ? `${savedAddr.address}, ${savedAddr.city}` : finalDeliveryAddress;
-        } else if (shipStreet || shipCity) {
-          // This safely filters out empty boxes so you don't get weird commas like " , , "
-          const addressParts = [shipFlat, shipStreet, shipCity, shipState, shipZip].filter(Boolean);
-          finalDeliveryAddress = addressParts.join(', ');
-        }
-
-        // Final safety net: If it's still completely blank, force a fallback message
-        if (!finalDeliveryAddress || finalDeliveryAddress.trim() === '') {
-          finalDeliveryAddress = 'No Address Provided by Customer';
-        }
-
-        // --- FORMAT THE PAYMENT METHOD ---
         let formattedPayment = 'Credit / Debit Card';
         if (selectedPaymentType === 'bank') formattedPayment = 'Direct Bank Transfer';
         if (selectedPaymentType === 'delivery') formattedPayment = 'Pay on Delivery';
@@ -1298,20 +1291,18 @@ function App() {
           shipping: shippingMethod,
           paymentType: formattedPayment, 
           cardLast4: last4,
-          deliveryAddress: finalDeliveryAddress // <--- Explicitly named deliveryAddress!
+          deliveryAddress: finalDeliveryAddress 
         };
 
         setSuccessOrderDetails(successData);
 
-        // --- NEW: TRIGGER AUTOMATION WEBHOOK FOR EMAIL/INVOICE ---
-        // --- BUILD THE EXACT PAYLOAD FOR MAKE.COM ---
         const webhookPayload = {
           orderId: data.order_summary?.id || Math.floor(Math.random() * 90000) + 10000,
           email: userEmail || 'Guest User',
           shipping: shippingMethod,
           paymentType: formattedPayment, 
           cardLast4: last4,
-          deliveryAddress: finalDeliveryAddress, // <-- Forced explicitly here!
+          deliveryAddress: finalDeliveryAddress,
           customerName: userName,
           items: cart,
           totalDue: finalTotalDue,
@@ -1320,10 +1311,6 @@ function App() {
           isFullyPaid: paymentArrangement === 100
         };
 
-        // --- THE TRACKER: Prints the data to your browser console before sending ---
-        console.log("🚀 DEBUG - PAYLOAD GOING TO MAKE.COM:", webhookPayload);
-
-        // Fire to Make.com
         fetch('https://hook.eu1.make.com/mslkh51d5bhj5w67yl5yyio5d81fwutr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1331,7 +1318,7 @@ function App() {
         }).catch(err => console.error("Receipt automation failed:", err));
 
         if (clearCart) clearCart(); 
-        setCurrentView('order_success'); // Route to the new screen
+        setCurrentView('order_success'); 
 
       } else {
         showNotification(`Checkout Failed: ${data.detail}`);
@@ -1513,7 +1500,7 @@ function App() {
     <div className={`bg-body-tertiary min-vh-100 ${currentView.startsWith('admin_') ? 'overflow-hidden' : 'pb-5'}`}>
       <style>{globalStyles}</style>
       
-      {currentView !== 'checkout' && !currentView.startsWith('admin_') && (
+      {currentView !== 'checkout' && currentView !== 'order_success' && !currentView.startsWith('admin_') && (
   <nav className={`navbar navbar-expand-lg bg-body shadow-sm py-3 mb-0 sticky-top border-bottom ${(currentView === 'customer_orders' || currentView === 'wishlist') ? 'd-none d-md-flex' : ''}`}>
   <div className="container-fluid px-4 d-flex justify-content-between align-items-center">
     
@@ -2744,8 +2731,7 @@ function App() {
       </div>
 
       {/* --- BOTTOM MOBILE NAVIGATION BAR --- */}
-      {currentView !== 'checkout' && !currentView.startsWith('admin_') && (
-        <div className="position-fixed bottom-0 start-0 w-100 bg-body shadow-lg border-top d-flex justify-content-around align-items-center py-2 d-md-none" style={{zIndex: 1030}}>
+          {currentView !== 'checkout' && currentView !== 'order_success' && !currentView.startsWith('admin_') && (        <div className="position-fixed bottom-0 start-0 w-100 bg-body shadow-lg border-top d-flex justify-content-around align-items-center py-2 d-md-none" style={{zIndex: 1030}}>
           <button className={`btn border-0 d-flex flex-column align-items-center p-1 ${currentView === 'store' ? 'text-primary' : 'text-muted'}`} onClick={() => setCurrentView('store')}>
             <i className={`bi ${currentView === 'store' ? 'bi-house-fill' : 'bi-house'} fs-5 mb-1`}></i>
             <span style={{fontSize: '0.65rem', fontWeight: '600'}}>Home</span>
